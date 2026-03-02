@@ -1205,46 +1205,283 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- ============================================================
--- EXAMPLE USAGE (remove this block when using as a library)
+-- SILENT AIM INTEGRATION
 -- ============================================================
 
-local Main = Library:AddCategory("Main", "house")
-Main:AddToggle("Feature A", false, function(v)
-	Library:Notify(`Feature A: {v and "ON" or "OFF"}`)
-end)
-Main:AddToggle("Feature B", true)
-Main:AddSlider("Speed", 16, 1, 100)
-Main:AddDropdown("Mode", { "Normal", "Rage", "Legit" }, "Normal", function(v)
-	Library:Notify(`Mode: {v}`)
-end)
-Main:AddSeparator()
-Main:AddButton("Execute Script", function()
-	Library:Notify("Script executed!", "success")
-end)
-Main:AddKeybind("Toggle Key", Enum.KeyCode.RightControl, function(key)
-	Library:Notify(`Keybind set: {key.Name}`)
-end)
-Main:AddTextInput("Target", "Player name...", function(text, enter)
-	if enter then Library:Notify(`Target: {text}`) end
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+local WeaponPackets = require(ReplicatedStorage.Common.Packets.WeaponPackets)
+
+-- Silent Aim State
+local SilentAimEnabled = true
+local FOVRadius = 9999
+local FOVVisible = false
+local TargetBone = "Head"
+local HitChance = 100
+
+-- Drawing objects
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1
+FOVCircle.NumSides = 64
+FOVCircle.Filled = false
+FOVCircle.Transparency = 0.8
+FOVCircle.Color = Color3.fromRGB(240, 60, 60)
+FOVCircle.Visible = false
+
+local TargetDot = Drawing.new("Circle")
+TargetDot.Thickness = 1
+TargetDot.NumSides = 16
+TargetDot.Filled = true
+TargetDot.Radius = 4
+TargetDot.Color = Color3.fromRGB(240, 60, 60)
+TargetDot.Visible = false
+
+-- Bone mapping
+local BoneMap = {
+	["Head"] = {"Hitbox_Head", "Head"},
+	["Torso"] = {"Hitbox_Torso", "HumanoidRootPart"},
+	["Left Arm"] = {"Hitbox_Left Arm", "Left Arm", "LeftHand"},
+	["Right Arm"] = {"Hitbox_Right Arm", "Right Arm", "RightHand"},
+	["Left Leg"] = {"Hitbox_Left Leg", "Left Leg", "LeftFoot"},
+	["Right Leg"] = {"Hitbox_Right Leg", "Right Leg", "RightFoot"},
+}
+
+local function FindInHitboxFolder(Character, BoneName)
+	local HitboxFolder = Character:FindFirstChild("Hitbox")
+	if HitboxFolder then
+		local Part = HitboxFolder:FindFirstChild(BoneName)
+		if Part then
+			return Part
+		end
+	end
+	return Character:FindFirstChild(BoneName) or Character:FindFirstChild(BoneName, true)
+end
+
+local function GetTargetPart(Character)
+	if TargetBone == "Random" then
+		local ValidParts = {}
+		for _, BoneList in BoneMap do
+			for _, BoneName in BoneList do
+				local Part = FindInHitboxFolder(Character, BoneName)
+				if Part then
+					table.insert(ValidParts, Part)
+					break
+				end
+			end
+		end
+		if #ValidParts > 0 then
+			return ValidParts[math.random(1, #ValidParts)]
+		end
+		return nil
+	end
+	local BoneList = BoneMap[TargetBone] or BoneMap["Head"]
+	for _, BoneName in BoneList do
+		local Part = FindInHitboxFolder(Character, BoneName)
+		if Part then
+			return Part
+		end
+	end
+	return nil
+end
+
+local function IsAlive(Character)
+	if not Character then return false end
+	if not Character:IsDescendantOf(workspace) then return false end
+	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid or Humanoid.Health <= 0 then return false end
+	if Character:FindFirstChildOfClass("ForceField") or Character:FindFirstChild("ForceField") then return false end
+	if not Character:GetAttribute("deployed") then return false end
+	return true
+end
+
+local function IsVisible(FromPosition, Character, TargetPart)
+	local Direction = (TargetPart.Position - FromPosition).Unit
+	local Distance = (TargetPart.Position - FromPosition).Magnitude
+	local Params = RaycastParams.new()
+	Params.FilterType = Enum.RaycastFilterType.Exclude
+	local MyChar = LocalPlayer.Character
+	local Effects = workspace:FindFirstChild("Effects")
+	local FilterList = {}
+	if MyChar then table.insert(FilterList, MyChar) end
+	if Effects then table.insert(FilterList, Effects) end
+	Params.FilterDescendantsInstances = FilterList
+	local RayResult = workspace:Raycast(FromPosition, Direction * Distance, Params)
+	if not RayResult then return true end
+	local HitModel = RayResult.Instance:FindFirstAncestorWhichIsA("Model")
+	return HitModel == Character
+end
+
+local function ShouldTargetPlayer(Player)
+	if Player == LocalPlayer then return false end
+	local Character = Player.Character
+	if not Character then return false end
+	if not IsAlive(Character) then return false end
+	return true
+end
+
+local function GetNearestTarget()
+	local Camera = workspace.CurrentCamera
+	local BestTarget = nil
+	local BestDistance = math.huge
+	local BestPart = nil
+	local ViewportSize = Camera.ViewportSize
+	local ScreenCenter = Vector2.new(ViewportSize.X / 2, ViewportSize.Y / 2)
+	local MyChar = LocalPlayer.Character
+	local MyHead = MyChar and MyChar:FindFirstChild("Head")
+
+	for _, Player in Players:GetPlayers() do
+		if ShouldTargetPlayer(Player) then
+			local Character = Player.Character
+			local HitPart = GetTargetPart(Character)
+			if HitPart then
+				local ScreenPos, OnScreen = Camera:WorldToViewportPoint(HitPart.Position)
+				if OnScreen then
+					local Distance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - ScreenCenter).Magnitude
+					if Distance < FOVRadius and Distance < BestDistance then
+						if MyHead and IsVisible(MyHead.Position, Character, HitPart) then
+							BestDistance = Distance
+							BestTarget = Character
+							BestPart = HitPart
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return BestTarget, BestPart
+end
+
+local function RollHitChance()
+	if HitChance >= 100 then return true end
+	return math.random(1, 100) <= HitChance
+end
+
+-- Hook weapon packet
+local OriginalSend = WeaponPackets.useWeapon.send
+
+WeaponPackets.useWeapon.send = function(Data)
+	if SilentAimEnabled and RollHitChance() then
+		local TargetCharacter, TargetPart = GetNearestTarget()
+		if TargetCharacter and TargetPart then
+			Data.hitResult = TargetCharacter
+			Data.hitPart = TargetPart
+			Data.position = TargetPart.Position
+			Data.direction = (TargetPart.Position - Data.origin).Unit
+		end
+	end
+	return OriginalSend(Data)
+end
+
+-- FOV circle & target dot render loop
+RunService.RenderStepped:Connect(function()
+	local Camera = workspace.CurrentCamera
+	local ScreenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+	FOVCircle.Position = ScreenCenter
+	FOVCircle.Radius = FOVRadius
+	FOVCircle.Visible = FOVVisible and SilentAimEnabled
+
+	if SilentAimEnabled then
+		local _, TargetPart = GetNearestTarget()
+		if TargetPart then
+			local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
+			if OnScreen then
+				TargetDot.Position = Vector2.new(ScreenPos.X, ScreenPos.Y)
+				TargetDot.Visible = true
+			else
+				TargetDot.Visible = false
+			end
+		else
+			TargetDot.Visible = false
+		end
+	else
+		TargetDot.Visible = false
+	end
 end)
 
+-- ============================================================
+-- GUI CATEGORIES
+-- ============================================================
+
+-- Aimbot category
+local Aimbot = Library:AddCategory("Aimbot", "crosshair")
+Aimbot:AddToggle("Silent Aim", SilentAimEnabled, function(v)
+	SilentAimEnabled = v
+	Library:Notify(`Silent Aim: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+Aimbot:AddSeparator()
+Aimbot:AddDropdown("Target Bone", {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "Random"}, TargetBone, function(v)
+	TargetBone = v
+	Library:Notify(`Target Bone: {v}`)
+end)
+Aimbot:AddSlider("Hit Chance", HitChance, 1, 100, function(v)
+	HitChance = v
+end)
+Aimbot:AddSlider("FOV Radius", FOVRadius, 50, 9999, function(v)
+	FOVRadius = v
+end)
+Aimbot:AddToggle("Show FOV Circle", FOVVisible, function(v)
+	FOVVisible = v
+end)
+
+-- Visuals category
 local Visuals = Library:AddCategory("Visuals", "eye")
-Visuals:AddToggle("ESP", false)
-Visuals:AddToggle("Chams", false)
-Visuals:AddDropdown("ESP Type", { "Box", "Corner", "3D" }, "Box")
-Visuals:AddSlider("Transparency", 50, 0, 100)
+Visuals:AddLabel("FOV circle and target dot are drawn on screen.")
 Visuals:AddSeparator()
-Visuals:AddLabel("Customize your ESP settings above.")
+Visuals:AddSlider("FOV Circle Opacity", 80, 0, 100, function(v)
+	FOVCircle.Transparency = v / 100
+end)
+Visuals:AddSlider("Target Dot Size", 4, 1, 10, function(v)
+	TargetDot.Radius = v
+end)
+Visuals:AddButton("Set FOV Color Red", function()
+	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
+	TargetDot.Color = Color3.fromRGB(240, 60, 60)
+	Library:Notify("Color set to Red", "success")
+end)
+Visuals:AddButton("Set FOV Color Blue", function()
+	FOVCircle.Color = Color3.fromRGB(60, 120, 240)
+	TargetDot.Color = Color3.fromRGB(60, 120, 240)
+	Library:Notify("Color set to Blue", "success")
+end)
+Visuals:AddButton("Set FOV Color Green", function()
+	FOVCircle.Color = Color3.fromRGB(60, 240, 80)
+	TargetDot.Color = Color3.fromRGB(60, 240, 80)
+	Library:Notify("Color set to Green", "success")
+end)
 
+-- Misc category
 local Misc = Library:AddCategory("Misc", "wrench")
-Misc:AddToggle("Anti-AFK", true)
-Misc:AddButton("Rejoin Server", function()
-	Library:Notify("Rejoining...", "warning")
+Misc:AddKeybind("Toggle GUI Key", Enum.KeyCode.RightShift, function(key)
+	Library:Notify(`Toggle key set: {key.Name}`)
 end)
-Misc:AddButton("Copy Game Link", function()
-	Library:Notify("Copied!", "success")
+Misc:AddSeparator()
+Misc:AddButton("Reset Settings", function()
+	SilentAimEnabled = true
+	FOVRadius = 9999
+	FOVVisible = false
+	TargetBone = "Head"
+	HitChance = 100
+	FOVCircle.Transparency = 0.8
+	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
+	TargetDot.Color = Color3.fromRGB(240, 60, 60)
+	TargetDot.Radius = 4
+	Library:Notify("Settings reset to default!", "warning")
+end)
+Misc:AddButton("Unload Script", function()
+	SilentAimEnabled = false
+	FOVCircle.Visible = false
+	TargetDot.Visible = false
+	FOVCircle:Remove()
+	TargetDot:Remove()
+	WeaponPackets.useWeapon.send = OriginalSend
+	Library:Destroy()
 end)
 
-Library:Notify("Nova UI loaded!")
+Library:Notify("Nova Silent Aim loaded!", "success")
 
 return Library

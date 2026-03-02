@@ -1279,49 +1279,734 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- ============================================================
--- EXAMPLE USAGE (remove this block when using as a library)
+-- SILENT AIM INTEGRATION
 -- ============================================================
 
-local Main = Library:AddCategory("Main", "house")
-Main:AddToggle("Feature A", false, function(v)
-	Library:Notify(`Feature A: {v and "ON" or "OFF"}`)
-end)
-Main:AddToggle("Feature B", true)
-Main:AddSlider("Speed", 16, 1, 100)
-Main:AddDropdown("Mode", { "Normal", "Rage", "Legit" }, "Normal", function(v)
-	Library:Notify(`Mode: {v}`)
-end)
-Main:AddSeparator()
-Main:AddButton("Execute Script", function()
-	Library:Notify("Script executed!", "success")
-end)
-Main:AddKeybind("Toggle Key", Enum.KeyCode.RightControl, function(key)
-	Library:Notify(`Keybind set: {key.Name}`)
-end)
-Main:AddTextInput("Target", "Player name...", function(text, enter)
-	if enter then Library:Notify(`Target: {text}`) end
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+local WeaponPackets = require(ReplicatedStorage.Common.Packets.WeaponPackets)
+
+-- Silent Aim State
+local SilentAimEnabled = true
+local FOVRadius = 9999
+local FOVVisible = false
+local TargetBone = "Head"
+local HitChance = 100
+
+-- Drawing objects
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1
+FOVCircle.NumSides = 64
+FOVCircle.Filled = false
+FOVCircle.Transparency = 0.8
+FOVCircle.Color = Color3.fromRGB(240, 60, 60)
+FOVCircle.Visible = false
+
+local TargetDot = Drawing.new("Circle")
+TargetDot.Thickness = 1
+TargetDot.NumSides = 16
+TargetDot.Filled = true
+TargetDot.Radius = 4
+TargetDot.Color = Color3.fromRGB(240, 60, 60)
+TargetDot.Visible = false
+
+-- Bone mapping
+local BoneMap = {
+	["Head"] = {"Hitbox_Head", "Head"},
+	["Torso"] = {"Hitbox_Torso", "HumanoidRootPart"},
+	["Left Arm"] = {"Hitbox_Left Arm", "Left Arm", "LeftHand"},
+	["Right Arm"] = {"Hitbox_Right Arm", "Right Arm", "RightHand"},
+	["Left Leg"] = {"Hitbox_Left Leg", "Left Leg", "LeftFoot"},
+	["Right Leg"] = {"Hitbox_Right Leg", "Right Leg", "RightFoot"},
+}
+
+local function FindInHitboxFolder(Character, BoneName)
+	local HitboxFolder = Character:FindFirstChild("Hitbox")
+	if HitboxFolder then
+		local Part = HitboxFolder:FindFirstChild(BoneName)
+		if Part then
+			return Part
+		end
+	end
+	return Character:FindFirstChild(BoneName) or Character:FindFirstChild(BoneName, true)
+end
+
+local function GetTargetPart(Character)
+	if TargetBone == "Random" then
+		local ValidParts = {}
+		for _, BoneList in BoneMap do
+			for _, BoneName in BoneList do
+				local Part = FindInHitboxFolder(Character, BoneName)
+				if Part then
+					table.insert(ValidParts, Part)
+					break
+				end
+			end
+		end
+		if #ValidParts > 0 then
+			return ValidParts[math.random(1, #ValidParts)]
+		end
+		return nil
+	end
+	local BoneList = BoneMap[TargetBone] or BoneMap["Head"]
+	for _, BoneName in BoneList do
+		local Part = FindInHitboxFolder(Character, BoneName)
+		if Part then
+			return Part
+		end
+	end
+	return nil
+end
+
+local function IsAlive(Character)
+	if not Character then return false end
+	if not Character:IsDescendantOf(workspace) then return false end
+	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid or Humanoid.Health <= 0 then return false end
+	if Character:FindFirstChildOfClass("ForceField") or Character:FindFirstChild("ForceField") then return false end
+	if not Character:GetAttribute("deployed") then return false end
+	return true
+end
+
+local function IsVisible(FromPosition, Character, TargetPart)
+	local Direction = (TargetPart.Position - FromPosition).Unit
+	local Distance = (TargetPart.Position - FromPosition).Magnitude
+	local Params = RaycastParams.new()
+	Params.FilterType = Enum.RaycastFilterType.Exclude
+	local MyChar = LocalPlayer.Character
+	local Effects = workspace:FindFirstChild("Effects")
+	local FilterList = {}
+	if MyChar then table.insert(FilterList, MyChar) end
+	if Effects then table.insert(FilterList, Effects) end
+	Params.FilterDescendantsInstances = FilterList
+	local RayResult = workspace:Raycast(FromPosition, Direction * Distance, Params)
+	if not RayResult then return true end
+	local HitModel = RayResult.Instance:FindFirstAncestorWhichIsA("Model")
+	return HitModel == Character
+end
+
+local function ShouldTargetPlayer(Player)
+	if Player == LocalPlayer then return false end
+	local Character = Player.Character
+	if not Character then return false end
+	if not IsAlive(Character) then return false end
+	return true
+end
+
+local function GetNearestTarget()
+	local Camera = workspace.CurrentCamera
+	local BestTarget = nil
+	local BestDistance = math.huge
+	local BestPart = nil
+	local ViewportSize = Camera.ViewportSize
+	local ScreenCenter = Vector2.new(ViewportSize.X / 2, ViewportSize.Y / 2)
+	local MyChar = LocalPlayer.Character
+	local MyHead = MyChar and MyChar:FindFirstChild("Head")
+
+	for _, Player in Players:GetPlayers() do
+		if ShouldTargetPlayer(Player) then
+			local Character = Player.Character
+			local HitPart = GetTargetPart(Character)
+			if HitPart then
+				local ScreenPos, OnScreen = Camera:WorldToViewportPoint(HitPart.Position)
+				if OnScreen then
+					local Distance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - ScreenCenter).Magnitude
+					if Distance < FOVRadius and Distance < BestDistance then
+						if MyHead and IsVisible(MyHead.Position, Character, HitPart) then
+							BestDistance = Distance
+							BestTarget = Character
+							BestPart = HitPart
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return BestTarget, BestPart
+end
+
+local function RollHitChance()
+	if HitChance >= 100 then return true end
+	return math.random(1, 100) <= HitChance
+end
+
+-- Hook weapon packet
+local OriginalSend = WeaponPackets.useWeapon.send
+
+WeaponPackets.useWeapon.send = function(Data)
+	if SilentAimEnabled and RollHitChance() then
+		local TargetCharacter, TargetPart = GetNearestTarget()
+		if TargetCharacter and TargetPart then
+			Data.hitResult = TargetCharacter
+			Data.hitPart = TargetPart
+			Data.position = TargetPart.Position
+			Data.direction = (TargetPart.Position - Data.origin).Unit
+		end
+	end
+	return OriginalSend(Data)
+end
+
+-- FOV circle & target dot render loop
+RunService.RenderStepped:Connect(function()
+	local Camera = workspace.CurrentCamera
+	local ScreenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+	FOVCircle.Position = ScreenCenter
+	FOVCircle.Radius = FOVRadius
+	FOVCircle.Visible = FOVVisible and SilentAimEnabled
+
+	if SilentAimEnabled then
+		local _, TargetPart = GetNearestTarget()
+		if TargetPart then
+			local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
+			if OnScreen then
+				TargetDot.Position = Vector2.new(ScreenPos.X, ScreenPos.Y)
+				TargetDot.Visible = true
+			else
+				TargetDot.Visible = false
+			end
+		else
+			TargetDot.Visible = false
+		end
+	else
+		TargetDot.Visible = false
+	end
 end)
 
+-- ============================================================
+-- GUI CATEGORIES
+-- ============================================================
+
+-- Aimbot category
+local Aimbot = Library:AddCategory("Aimbot", "crosshair")
+Aimbot:AddToggle("Silent Aim", SilentAimEnabled, function(v)
+	SilentAimEnabled = v
+	Library:Notify(`Silent Aim: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+Aimbot:AddSeparator()
+Aimbot:AddDropdown("Target Bone", {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "Random"}, TargetBone, function(v)
+	TargetBone = v
+	Library:Notify(`Target Bone: {v}`)
+end)
+Aimbot:AddSlider("Hit Chance", HitChance, 1, 100, function(v)
+	HitChance = v
+end)
+Aimbot:AddSlider("FOV Radius", FOVRadius, 50, 9999, function(v)
+	FOVRadius = v
+end)
+Aimbot:AddToggle("Show FOV Circle", FOVVisible, function(v)
+	FOVVisible = v
+end)
+
+-- Visuals category
 local Visuals = Library:AddCategory("Visuals", "eye")
-Visuals:AddToggle("ESP", false)
-Visuals:AddToggle("Chams", false)
-Visuals:AddDropdown("ESP Type", { "Box", "Corner", "3D" }, "Box")
-Visuals:AddSlider("Transparency", 50, 0, 100)
+Visuals:AddLabel("FOV circle and target dot are drawn on screen.")
 Visuals:AddSeparator()
-Visuals:AddLabel("Customize your ESP settings above.")
+Visuals:AddSlider("FOV Circle Opacity", 80, 0, 100, function(v)
+	FOVCircle.Transparency = v / 100
+end)
+Visuals:AddSlider("Target Dot Size", 4, 1, 10, function(v)
+	TargetDot.Radius = v
+end)
+Visuals:AddButton("Set FOV Color Red", function()
+	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
+	TargetDot.Color = Color3.fromRGB(240, 60, 60)
+	Library:Notify("Color set to Red", "success")
+end)
+Visuals:AddButton("Set FOV Color Blue", function()
+	FOVCircle.Color = Color3.fromRGB(60, 120, 240)
+	TargetDot.Color = Color3.fromRGB(60, 120, 240)
+	Library:Notify("Color set to Blue", "success")
+end)
+Visuals:AddButton("Set FOV Color Green", function()
+	FOVCircle.Color = Color3.fromRGB(60, 240, 80)
+	TargetDot.Color = Color3.fromRGB(60, 240, 80)
+	Library:Notify("Color set to Green", "success")
+end)
 
+-- Misc category
 local Misc = Library:AddCategory("Misc", "wrench")
-Misc:AddToggle("Anti-AFK", true)
-Misc:AddButton("Rejoin Server", function()
-	Library:Notify("Rejoining...", "warning")
+Misc:AddKeybind("Toggle GUI Key", Enum.KeyCode.RightShift, function(key)
+	Library:Notify(`Toggle key set: {key.Name}`)
 end)
-Misc:AddButton("Copy Game Link", function()
-	Library:Notify("Copied!", "success")
+Misc:AddSeparator()
+Misc:AddButton("Reset Settings", function()
+	SilentAimEnabled = true
+	FOVRadius = 9999
+	FOVVisible = false
+	TargetBone = "Head"
+	HitChance = 100
+	FOVCircle.Transparency = 0.8
+	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
+	TargetDot.Color = Color3.fromRGB(240, 60, 60)
+	TargetDot.Radius = 4
+	Library:Notify("Settings reset to default!", "warning")
+end)
+Misc:AddButton("Unload Script", function()
+	SilentAimEnabled = false
+	FOVCircle.Visible = false
+	TargetDot.Visible = false
+	FOVCircle:Remove()
+	TargetDot:Remove()
+	WeaponPackets.useWeapon.send = OriginalSend
+	Library:Destroy()
 end)
 
-Library:Notify("Nova UI loaded!")
+Library:Notify("Nova Silent Aim loaded!", "success")
 
 return Library
+
+end)() end,
+    [6] = function()local wax,script,require=ImportGlobals(6)local ImportGlobals return (function(...)--[[
+	Icons Module - Template
+	Fetches and manages Lucide icons for the UI.
+	Uses deividcomsono's lucide-roblox-direct for icon spritesheet.
+	
+	Usage:
+		local Icons = require(path.to.Icons)
+		
+		-- Apply icon to ImageLabel
+		Icons.ApplyIcon(imageLabel, "settings")
+		Icons.ApplyIcon(imageLabel, "home")
+		
+		-- Get icon data
+		local iconData = Icons.GetIcon("user")
+		if iconData then
+			print(iconData.Url, iconData.ImageRectOffset, iconData.ImageRectSize)
+		end
+]]
+
+local Icons = {}
+
+export type IconData = {
+	Url: string,
+	Id: number,
+	IconName: string,
+	ImageRectOffset: Vector2,
+	ImageRectSize: Vector2,
+}
+
+-- Try to load the icons module
+local Success, IconsModule = pcall(function()
+	local IconFetchSuccess, IconModuleSource = pcall(request, {
+		Url = "https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua",
+		Method = "GET",
+	})
+
+	assert(
+		IconFetchSuccess and IconModuleSource.Success or IconModuleSource.StatusCode >= 200 and IconModuleSource.StatusCode < 300,
+		"Failed to fetch lucide icons direct module source"
+	)
+	return (loadstring(IconModuleSource.Body) :: () -> { Icons: { string }, GetAsset: (Name: string) -> IconData? })()
+end)
+
+if not Success then
+	warn("[Icons] Failed to load Lucide icons module. Icons will not be available.")
+end
+
+--[[
+	Get icon data by name
+	@param iconName The name of the Lucide icon
+	@return IconData or nil if not found
+]]
+function Icons.GetIcon(iconName: string): IconData?
+	if not Success or not IconsModule then
+		return nil
+	end
+
+	local success, icon = pcall(IconsModule.GetAsset, iconName)
+	if not success then
+		return nil
+	end
+
+	return icon
+end
+
+--[[
+	Apply icon to an ImageLabel
+	@param imageLabel The ImageLabel to apply the icon to
+	@param iconName The name of the Lucide icon
+	@return boolean indicating success
+]]
+function Icons.ApplyIcon(imageLabel: ImageLabel, iconName: string): boolean
+	local icon = Icons.GetIcon(iconName)
+	if not icon then
+		return false
+	end
+
+	imageLabel.Image = icon.Url
+	imageLabel.ImageRectOffset = icon.ImageRectOffset
+	imageLabel.ImageRectSize = icon.ImageRectSize
+	return true
+end
+
+--[[
+	Check if icons are available
+	@return boolean
+]]
+function Icons.IsAvailable(): boolean
+	return Success and IconsModule ~= nil
+end
+
+--[[
+	Get list of all available icon names
+	@return Array of icon names or empty array if not loaded
+]]
+function Icons.GetAllIconNames(): { string }
+	if not Success or not IconsModule or not IconsModule.Icons then
+		return {}
+	end
+	return IconsModule.Icons
+end
+
+return Icons
+
+end)() end,
+    [7] = function()local wax,script,require=ImportGlobals(7)local ImportGlobals return (function(...)--[[
+	Interface Module - Template
+	Utility for creating UI elements with properties applied automatically.
+	
+	Usage:
+		local Interface = require(path.to.Interface)
+		
+		local frame = Interface.New("Frame", {
+			Size = UDim2.fromOffset(200, 100),
+			BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+			Parent = screenGui,
+			
+			["UICorner"] = { CornerRadius = UDim.new(0, 8) },
+			["UIStroke"] = { Color = Color3.fromRGB(50, 50, 50), Thickness = 1 },
+		})
+]]
+
+local Interface = {}
+
+-- Special UI components that can be created inline
+local SpecialProperties = {
+	["UICorner"] = true,
+	["UIStroke"] = true,
+	["UIPadding"] = true,
+	["UIListLayout"] = true,
+	["UIGridLayout"] = true,
+	["UITableLayout"] = true,
+	["UIPageLayout"] = true,
+	["UIFlexItem"] = true,
+	["UISizeConstraint"] = true,
+	["UITextSizeConstraint"] = true,
+	["UIAspectRatioConstraint"] = true,
+	["UIGradient"] = true,
+	["UIScale"] = true,
+}
+
+--[[
+	Create a new instance with properties
+	@param className The class name of the instance to create
+	@param properties Table of properties to apply (supports nested UI components)
+	@return The created instance
+]]
+function Interface.New(className: string, properties: { [string]: any }?): Instance
+	local instance = Instance.new(className)
+
+	if properties then
+		for key, value in pairs(properties) do
+			if SpecialProperties[key] then
+				-- Create UI component as child
+				local uiComponent = Instance.new(key)
+				if type(value) == "table" then
+					for prop, val in pairs(value) do
+						uiComponent[prop] = val
+					end
+				end
+				uiComponent.Parent = instance
+			else
+				instance[key] = value
+			end
+		end
+	end
+
+	return instance
+end
+
+--[[
+	Create a ScreenGui with common settings
+	@param name The name of the ScreenGui
+	@param parent Optional parent (defaults to CoreGui/PlayerGui)
+	@return The created ScreenGui
+]]
+function Interface.CreateScreenGui(name: string, parent: Instance?): ScreenGui
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = name
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.ResetOnSpawn = false
+	screenGui.DisplayOrder = 999999
+
+	if parent then
+		screenGui.Parent = parent
+	else
+		-- Try gethui first, then CoreGui
+		local success, _ = pcall(function()
+			if gethui then
+				screenGui.Parent = gethui()
+			else
+				screenGui.Parent = wax.shared.CoreGui
+			end
+		end)
+
+		if not success then
+			pcall(function()
+				screenGui.Parent = wax.shared.Players.LocalPlayer:WaitForChild("PlayerGui")
+			end)
+		end
+	end
+
+	return screenGui
+end
+
+--[[
+	Create a TextLabel with sensible defaults
+]]
+function Interface.CreateTextLabel(properties: { [string]: any }): TextLabel
+	local defaults = {
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(220, 220, 220),
+		TextSize = 14,
+		Font = Enum.Font.GothamMedium,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("TextLabel", properties) :: TextLabel
+end
+
+--[[
+	Create a TextButton with sensible defaults
+]]
+function Interface.CreateTextButton(properties: { [string]: any }): TextButton
+	local defaults = {
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(220, 220, 220),
+		TextSize = 14,
+		Font = Enum.Font.GothamMedium,
+		AutoButtonColor = false,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("TextButton", properties) :: TextButton
+end
+
+--[[
+	Create an ImageLabel with sensible defaults
+]]
+function Interface.CreateImageLabel(properties: { [string]: any }): ImageLabel
+	local defaults = {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("ImageLabel", properties) :: ImageLabel
+end
+
+--[[
+	Create an ImageButton with sensible defaults
+]]
+function Interface.CreateImageButton(properties: { [string]: any }): ImageButton
+	local defaults = {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		AutoButtonColor = false,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("ImageButton", properties) :: ImageButton
+end
+
+--[[
+	Create a ScrollingFrame with sensible defaults
+]]
+function Interface.CreateScrollingFrame(properties: { [string]: any }): ScrollingFrame
+	local defaults = {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80),
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("ScrollingFrame", properties) :: ScrollingFrame
+end
+
+return Interface
+
+end)() end,
+    [8] = function()local wax,script,require=ImportGlobals(8)local ImportGlobals return (function(...)--[[
+	Resize Module - Template
+	Enables resize functionality on UI frames.
+	
+	Usage:
+		local Resize = require(path.to.Resize)
+		
+		Resize.new({
+			MainFrame = mainFrame,
+			MinimumSize = Vector2.new(300, 200),
+			MaximumSize = UDim2.fromOffset(800, 600),
+		})
+]]
+
+local Resize = {}
+Resize.__index = Resize
+
+local UserInputService = game:GetService("UserInputService")
+
+local HANDLE_SIZE = 6
+local CORNER_HANDLE_SIZE = 20
+
+export type ResizeOptions = {
+	MainFrame: Frame,
+	MinimumSize: Vector2? | UDim2?,
+	MaximumSize: UDim2?,
+	HandleSize: number?,
+	CornerHandleSize: number?,
+	Mirrored: boolean?,
+}
+
+export type ResizeObject = {
+	MainFrame: Frame,
+	ResizeHandle: TextButton,
+	Enabled: boolean,
+	SetEnabled: (self: ResizeObject, enabled: boolean) -> (),
+	Destroy: (self: ResizeObject) -> (),
+}
+
+--[[
+	Create a new resizable frame
+	@param options Configuration options
+	@return ResizeObject
+]]
+function Resize.new(options: ResizeOptions): ResizeObject
+	local MainFrame = options.MainFrame
+	local HandleSize = options.HandleSize or HANDLE_SIZE
+	local CornerHandleSize = options.CornerHandleSize or CORNER_HANDLE_SIZE
+	local Mirrored = options.Mirrored or false
+
+	local MinimumSize
+	if typeof(options.MinimumSize) == "Vector2" then
+		MinimumSize = UDim2.fromOffset(options.MinimumSize.X, options.MinimumSize.Y)
+	elseif typeof(options.MinimumSize) == "UDim2" then
+		MinimumSize = options.MinimumSize
+	else
+		MinimumSize = UDim2.fromOffset(200, 150)
+	end
+
+	local MaximumSize = options.MaximumSize or UDim2.fromOffset(9999, 9999)
+
+	local self = setmetatable({}, Resize)
+	self.MainFrame = MainFrame
+	self.Enabled = true
+
+	-- Bottom-right corner resize handle
+	local ResizeHandle = Instance.new("TextButton")
+	ResizeHandle.Text = ""
+	ResizeHandle.BackgroundTransparency = 1
+	ResizeHandle.Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize)
+	ResizeHandle.Position = UDim2.new(1, -CornerHandleSize, 1, -CornerHandleSize)
+	ResizeHandle.ZIndex = 100
+	ResizeHandle.Parent = MainFrame
+
+	self.ResizeHandle = ResizeHandle
+
+	local dragging = false
+	local dragStart = nil
+	local startSize = nil
+	local connections = {}
+
+	table.insert(connections, ResizeHandle.InputBegan:Connect(function(input)
+		if not self.Enabled then return end
+		
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startSize = MainFrame.Size
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end))
+
+	table.insert(connections, UserInputService.InputChanged:Connect(function(input)
+		if not self.Enabled then return end
+		
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			local newWidth = math.clamp(
+				startSize.X.Offset + (Mirrored and -delta.X or delta.X),
+				MinimumSize.X.Offset,
+				MaximumSize.X.Offset
+			)
+			local newHeight = math.clamp(
+				startSize.Y.Offset + (Mirrored and -delta.Y or delta.Y),
+				MinimumSize.Y.Offset,
+				MaximumSize.Y.Offset
+			)
+
+			MainFrame.Size = UDim2.fromOffset(newWidth, newHeight)
+		end
+	end))
+
+	function self:SetEnabled(enabled: boolean)
+		self.Enabled = enabled
+		ResizeHandle.Visible = enabled
+		if not enabled then
+			dragging = false
+		end
+	end
+
+	function self:Destroy()
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+		connections = {}
+		ResizeHandle:Destroy()
+	end
+
+	return self
+end
+
+return Resize
 
 end)() end,
     [9] = function()local wax,script,require=ImportGlobals(9)local ImportGlobals return (function(...)--[[
@@ -1550,454 +2235,6 @@ function Sonner.clear()
 end
 
 return Sonner
-
-end)() end,
-    [6] = function()local wax,script,require=ImportGlobals(6)local ImportGlobals return (function(...)--[[
-	Icons Module - Template
-	Fetches and manages Lucide icons for the UI.
-	Uses deividcomsono's lucide-roblox-direct for icon spritesheet.
-	
-	Usage:
-		local Icons = require(path.to.Icons)
-		
-		-- Apply icon to ImageLabel
-		Icons.ApplyIcon(imageLabel, "settings")
-		Icons.ApplyIcon(imageLabel, "home")
-		
-		-- Get icon data
-		local iconData = Icons.GetIcon("user")
-		if iconData then
-			print(iconData.Url, iconData.ImageRectOffset, iconData.ImageRectSize)
-		end
-]]
-
-local Icons = {}
-
-export type IconData = {
-	Url: string,
-	Id: number,
-	IconName: string,
-	ImageRectOffset: Vector2,
-	ImageRectSize: Vector2,
-}
-
--- Try to load the icons module
-local Success, IconsModule = pcall(function()
-	local IconFetchSuccess, IconModuleSource = pcall(request, {
-		Url = "https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua",
-		Method = "GET",
-	})
-
-	assert(
-		IconFetchSuccess and IconModuleSource.Success or IconModuleSource.StatusCode >= 200 and IconModuleSource.StatusCode < 300,
-		"Failed to fetch lucide icons direct module source"
-	)
-	return (loadstring(IconModuleSource.Body) :: () -> { Icons: { string }, GetAsset: (Name: string) -> IconData? })()
-end)
-
-if not Success then
-	warn("[Icons] Failed to load Lucide icons module. Icons will not be available.")
-end
-
---[[
-	Get icon data by name
-	@param iconName The name of the Lucide icon
-	@return IconData or nil if not found
-]]
-function Icons.GetIcon(iconName: string): IconData?
-	if not Success or not IconsModule then
-		return nil
-	end
-
-	local success, icon = pcall(IconsModule.GetAsset, iconName)
-	if not success then
-		return nil
-	end
-
-	return icon
-end
-
---[[
-	Apply icon to an ImageLabel
-	@param imageLabel The ImageLabel to apply the icon to
-	@param iconName The name of the Lucide icon
-	@return boolean indicating success
-]]
-function Icons.ApplyIcon(imageLabel: ImageLabel, iconName: string): boolean
-	local icon = Icons.GetIcon(iconName)
-	if not icon then
-		return false
-	end
-
-	imageLabel.Image = icon.Url
-	imageLabel.ImageRectOffset = icon.ImageRectOffset
-	imageLabel.ImageRectSize = icon.ImageRectSize
-	return true
-end
-
---[[
-	Check if icons are available
-	@return boolean
-]]
-function Icons.IsAvailable(): boolean
-	return Success and IconsModule ~= nil
-end
-
---[[
-	Get list of all available icon names
-	@return Array of icon names or empty array if not loaded
-]]
-function Icons.GetAllIconNames(): { string }
-	if not Success or not IconsModule or not IconsModule.Icons then
-		return {}
-	end
-	return IconsModule.Icons
-end
-
-return Icons
-
-end)() end,
-    [8] = function()local wax,script,require=ImportGlobals(8)local ImportGlobals return (function(...)--[[
-	Resize Module - Template
-	Enables resize functionality on UI frames.
-	
-	Usage:
-		local Resize = require(path.to.Resize)
-		
-		Resize.new({
-			MainFrame = mainFrame,
-			MinimumSize = Vector2.new(300, 200),
-			MaximumSize = UDim2.fromOffset(800, 600),
-		})
-]]
-
-local Resize = {}
-Resize.__index = Resize
-
-local UserInputService = game:GetService("UserInputService")
-
-local HANDLE_SIZE = 6
-local CORNER_HANDLE_SIZE = 20
-
-export type ResizeOptions = {
-	MainFrame: Frame,
-	MinimumSize: Vector2? | UDim2?,
-	MaximumSize: UDim2?,
-	HandleSize: number?,
-	CornerHandleSize: number?,
-	Mirrored: boolean?,
-}
-
-export type ResizeObject = {
-	MainFrame: Frame,
-	ResizeHandle: TextButton,
-	Enabled: boolean,
-	SetEnabled: (self: ResizeObject, enabled: boolean) -> (),
-	Destroy: (self: ResizeObject) -> (),
-}
-
---[[
-	Create a new resizable frame
-	@param options Configuration options
-	@return ResizeObject
-]]
-function Resize.new(options: ResizeOptions): ResizeObject
-	local MainFrame = options.MainFrame
-	local HandleSize = options.HandleSize or HANDLE_SIZE
-	local CornerHandleSize = options.CornerHandleSize or CORNER_HANDLE_SIZE
-	local Mirrored = options.Mirrored or false
-
-	local MinimumSize
-	if typeof(options.MinimumSize) == "Vector2" then
-		MinimumSize = UDim2.fromOffset(options.MinimumSize.X, options.MinimumSize.Y)
-	elseif typeof(options.MinimumSize) == "UDim2" then
-		MinimumSize = options.MinimumSize
-	else
-		MinimumSize = UDim2.fromOffset(200, 150)
-	end
-
-	local MaximumSize = options.MaximumSize or UDim2.fromOffset(9999, 9999)
-
-	local self = setmetatable({}, Resize)
-	self.MainFrame = MainFrame
-	self.Enabled = true
-
-	-- Bottom-right corner resize handle
-	local ResizeHandle = Instance.new("TextButton")
-	ResizeHandle.Text = ""
-	ResizeHandle.BackgroundTransparency = 1
-	ResizeHandle.Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize)
-	ResizeHandle.Position = UDim2.new(1, -CornerHandleSize, 1, -CornerHandleSize)
-	ResizeHandle.ZIndex = 100
-	ResizeHandle.Parent = MainFrame
-
-	self.ResizeHandle = ResizeHandle
-
-	local dragging = false
-	local dragStart = nil
-	local startSize = nil
-	local connections = {}
-
-	table.insert(connections, ResizeHandle.InputBegan:Connect(function(input)
-		if not self.Enabled then return end
-		
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			dragStart = input.Position
-			startSize = MainFrame.Size
-
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
-		end
-	end))
-
-	table.insert(connections, UserInputService.InputChanged:Connect(function(input)
-		if not self.Enabled then return end
-		
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local delta = input.Position - dragStart
-			local newWidth = math.clamp(
-				startSize.X.Offset + (Mirrored and -delta.X or delta.X),
-				MinimumSize.X.Offset,
-				MaximumSize.X.Offset
-			)
-			local newHeight = math.clamp(
-				startSize.Y.Offset + (Mirrored and -delta.Y or delta.Y),
-				MinimumSize.Y.Offset,
-				MaximumSize.Y.Offset
-			)
-
-			MainFrame.Size = UDim2.fromOffset(newWidth, newHeight)
-		end
-	end))
-
-	function self:SetEnabled(enabled: boolean)
-		self.Enabled = enabled
-		ResizeHandle.Visible = enabled
-		if not enabled then
-			dragging = false
-		end
-	end
-
-	function self:Destroy()
-		for _, connection in ipairs(connections) do
-			connection:Disconnect()
-		end
-		connections = {}
-		ResizeHandle:Destroy()
-	end
-
-	return self
-end
-
-return Resize
-
-end)() end,
-    [7] = function()local wax,script,require=ImportGlobals(7)local ImportGlobals return (function(...)--[[
-	Interface Module - Template
-	Utility for creating UI elements with properties applied automatically.
-	
-	Usage:
-		local Interface = require(path.to.Interface)
-		
-		local frame = Interface.New("Frame", {
-			Size = UDim2.fromOffset(200, 100),
-			BackgroundColor3 = Color3.fromRGB(30, 30, 30),
-			Parent = screenGui,
-			
-			["UICorner"] = { CornerRadius = UDim.new(0, 8) },
-			["UIStroke"] = { Color = Color3.fromRGB(50, 50, 50), Thickness = 1 },
-		})
-]]
-
-local Interface = {}
-
--- Special UI components that can be created inline
-local SpecialProperties = {
-	["UICorner"] = true,
-	["UIStroke"] = true,
-	["UIPadding"] = true,
-	["UIListLayout"] = true,
-	["UIGridLayout"] = true,
-	["UITableLayout"] = true,
-	["UIPageLayout"] = true,
-	["UIFlexItem"] = true,
-	["UISizeConstraint"] = true,
-	["UITextSizeConstraint"] = true,
-	["UIAspectRatioConstraint"] = true,
-	["UIGradient"] = true,
-	["UIScale"] = true,
-}
-
---[[
-	Create a new instance with properties
-	@param className The class name of the instance to create
-	@param properties Table of properties to apply (supports nested UI components)
-	@return The created instance
-]]
-function Interface.New(className: string, properties: { [string]: any }?): Instance
-	local instance = Instance.new(className)
-
-	if properties then
-		for key, value in pairs(properties) do
-			if SpecialProperties[key] then
-				-- Create UI component as child
-				local uiComponent = Instance.new(key)
-				if type(value) == "table" then
-					for prop, val in pairs(value) do
-						uiComponent[prop] = val
-					end
-				end
-				uiComponent.Parent = instance
-			else
-				instance[key] = value
-			end
-		end
-	end
-
-	return instance
-end
-
---[[
-	Create a ScreenGui with common settings
-	@param name The name of the ScreenGui
-	@param parent Optional parent (defaults to CoreGui/PlayerGui)
-	@return The created ScreenGui
-]]
-function Interface.CreateScreenGui(name: string, parent: Instance?): ScreenGui
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = name
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.ResetOnSpawn = false
-	screenGui.DisplayOrder = 999999
-
-	if parent then
-		screenGui.Parent = parent
-	else
-		-- Try gethui first, then CoreGui
-		local success, _ = pcall(function()
-			if gethui then
-				screenGui.Parent = gethui()
-			else
-				screenGui.Parent = wax.shared.CoreGui
-			end
-		end)
-
-		if not success then
-			pcall(function()
-				screenGui.Parent = wax.shared.Players.LocalPlayer:WaitForChild("PlayerGui")
-			end)
-		end
-	end
-
-	return screenGui
-end
-
---[[
-	Create a TextLabel with sensible defaults
-]]
-function Interface.CreateTextLabel(properties: { [string]: any }): TextLabel
-	local defaults = {
-		BackgroundTransparency = 1,
-		TextColor3 = Color3.fromRGB(220, 220, 220),
-		TextSize = 14,
-		Font = Enum.Font.GothamMedium,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("TextLabel", properties) :: TextLabel
-end
-
---[[
-	Create a TextButton with sensible defaults
-]]
-function Interface.CreateTextButton(properties: { [string]: any }): TextButton
-	local defaults = {
-		BackgroundTransparency = 1,
-		TextColor3 = Color3.fromRGB(220, 220, 220),
-		TextSize = 14,
-		Font = Enum.Font.GothamMedium,
-		AutoButtonColor = false,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("TextButton", properties) :: TextButton
-end
-
---[[
-	Create an ImageLabel with sensible defaults
-]]
-function Interface.CreateImageLabel(properties: { [string]: any }): ImageLabel
-	local defaults = {
-		BackgroundTransparency = 1,
-		ScaleType = Enum.ScaleType.Fit,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("ImageLabel", properties) :: ImageLabel
-end
-
---[[
-	Create an ImageButton with sensible defaults
-]]
-function Interface.CreateImageButton(properties: { [string]: any }): ImageButton
-	local defaults = {
-		BackgroundTransparency = 1,
-		ScaleType = Enum.ScaleType.Fit,
-		AutoButtonColor = false,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("ImageButton", properties) :: ImageButton
-end
-
---[[
-	Create a ScrollingFrame with sensible defaults
-]]
-function Interface.CreateScrollingFrame(properties: { [string]: any }): ScrollingFrame
-	local defaults = {
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80),
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("ScrollingFrame", properties) :: ScrollingFrame
-end
-
-return Interface
 
 end)() end,
     [5] = function()local wax,script,require=ImportGlobals(5)local ImportGlobals return (function(...)--[[
@@ -2311,17 +2548,10 @@ local ObjectTree = {
                         },
                         {
                             {
-                                10,
+                                9,
                                 2,
                                 {
-                                    "Theme"
-                                }
-                            },
-                            {
-                                8,
-                                2,
-                                {
-                                    "Resize"
+                                    "Sonner"
                                 }
                             },
                             {
@@ -2332,10 +2562,17 @@ local ObjectTree = {
                                 }
                             },
                             {
-                                9,
+                                5,
                                 2,
                                 {
-                                    "Sonner"
+                                    "Helper"
+                                }
+                            },
+                            {
+                                10,
+                                2,
+                                {
+                                    "Theme"
                                 }
                             },
                             {
@@ -2346,17 +2583,17 @@ local ObjectTree = {
                                 }
                             },
                             {
+                                8,
+                                2,
+                                {
+                                    "Resize"
+                                }
+                            },
+                            {
                                 6,
                                 2,
                                 {
                                     "Icons"
-                                }
-                            },
-                            {
-                                5,
-                                2,
-                                {
-                                    "Helper"
                                 }
                             }
                         }
@@ -2369,14 +2606,14 @@ local ObjectTree = {
 
 -- Line offsets for debugging (only included when minifyTables is false)
 local LineOffsets = {
-    [6] = 1555,
-    [9] = 1327,
-    [2] = 75,
-    [10] = 16,
-    [8] = 1660,
-    [7] = 1799,
-    [5] = 2003,
-    [4] = 2185
+    [6] = 1556,
+    [2] = 67,
+    [7] = 1661,
+    [10] = 8,
+    [8] = 1865,
+    [9] = 2004,
+    [5] = 2232,
+    [4] = 2414
 }
 
 -- Misc AOT variable imports
@@ -2826,8 +3063,11 @@ function ImportGlobals(refId)
             local PreviousPathMatch
             for PathMatch in string_gmatch(module, "([^/]*)/?") do
                 local RealIndex = PathMatch
-                if PathMatch == ".." then
-                    RealIndex = "Parent"
+                if PathMatch == "." then
+                    RealIndex = ""
+                elseif PathMatch == ".." then
+                    CurrentRefPointer = CurrentRefPointer.Parent
+                    RealIndex = ""
                 end
 
                 -- Don't advance dir if it's just another "/" either
