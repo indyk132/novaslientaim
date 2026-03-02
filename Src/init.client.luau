@@ -459,12 +459,6 @@ local function CreateSettingsDropdown(section, text, values, default, callback)
 	end)
 end
 
--- Silent Aim State (declared early for settings references)
-local SilentAimEnabled = true
-local FOVRadius = 150
-local FOVVisible = false
-local TargetBone = "Head"
-local HitChance = 100
 local ToggleKey = Enum.KeyCode.RightShift
 
 -- Build settings sections
@@ -1261,79 +1255,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- ============================================================
--- GUI CATEGORIES
--- ============================================================
-
--- Drawing objects (safe init)
-local FOVCircle, TargetDot
-pcall(function()
-	FOVCircle = Drawing.new("Circle")
-	FOVCircle.Thickness = 1
-	FOVCircle.NumSides = 64
-	FOVCircle.Filled = false
-	FOVCircle.Transparency = 0.8
-	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
-	FOVCircle.Visible = false
-
-	TargetDot = Drawing.new("Circle")
-	TargetDot.Thickness = 1
-	TargetDot.NumSides = 16
-	TargetDot.Filled = true
-	TargetDot.Radius = 4
-	TargetDot.Color = Color3.fromRGB(240, 60, 60)
-	TargetDot.Visible = false
-end)
-
--- Aimbot category
-local Aimbot = Library:AddCategory("Aimbot", "crosshair")
-Aimbot:AddToggle("Silent Aim", SilentAimEnabled, function(v)
-	SilentAimEnabled = v
-	Library:Notify(`Silent Aim: {v and "ON" or "OFF"}`, v and "success" or "error")
-end)
-Aimbot:AddSeparator()
-Aimbot:AddDropdown("Target Bone", {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "Random"}, TargetBone, function(v)
-	TargetBone = v
-	Library:Notify(`Target Bone: {v}`)
-end)
-Aimbot:AddSlider("Hit Chance", HitChance, 1, 100, function(v)
-	HitChance = v
-end)
-Aimbot:AddSlider("FOV Radius", FOVRadius, 50, 9999, function(v)
-	FOVRadius = v
-end)
-Aimbot:AddToggle("Show FOV Circle", FOVVisible, function(v)
-	FOVVisible = v
-end)
-
--- Visuals category
-local Visuals = Library:AddCategory("Visuals", "eye")
-Visuals:AddSlider("FOV Circle Opacity", 80, 0, 100, function(v)
-	if FOVCircle then FOVCircle.Transparency = v / 100 end
-end)
-Visuals:AddSlider("Target Dot Size", 4, 1, 10, function(v)
-	if TargetDot then TargetDot.Radius = v end
-end)
-
--- Misc category
-local Misc = Library:AddCategory("Misc", "wrench")
-Misc:AddButton("Reset Settings", function()
-	SilentAimEnabled = true
-	FOVRadius = 150
-	FOVVisible = false
-	TargetBone = "Head"
-	HitChance = 100
-	if FOVCircle then
-		FOVCircle.Transparency = 0.8
-		FOVCircle.Color = Color3.fromRGB(240, 60, 60)
-	end
-	if TargetDot then
-		TargetDot.Color = Color3.fromRGB(240, 60, 60)
-		TargetDot.Radius = 4
-	end
-	Library:Notify("Settings reset to default!", "warning")
-end)
-
--- ============================================================
 -- SERVICES (shared)
 -- ============================================================
 
@@ -1354,13 +1275,16 @@ local FlightEnabled = false
 local FlightSpeed = 60
 local WalkSpeedEnabled = false
 local WalkSpeedValue = 16
+local OriginalWalkSpeed = 16
 local JumpHeightEnabled = false
 local JumpHeightValue = 50
+local OriginalJumpPower = 50
 local NoclipEnabled = false
 local GodModeEnabled = false
 local FreecamEnabled = false
 local FreecamSpeed = 1
 local FreecamCFrame: CFrame? = nil
+local FreecamAngles = {x = 0, y = 0}
 local OriginalCameraSubject = nil
 local SpectateEnabled = false
 local SpectateTarget: string? = nil
@@ -1401,6 +1325,15 @@ end)
 CharCat:AddSeparator()
 CharCat:AddToggle("Walk Speed", false, function(v)
 	WalkSpeedEnabled = v
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		if v then
+			OriginalWalkSpeed = hum.WalkSpeed
+		else
+			hum.WalkSpeed = OriginalWalkSpeed
+		end
+	end
 	Library:Notify(`Walk Speed: {v and "ON" or "OFF"}`, v and "success" or "error")
 end)
 CharCat:AddSlider("Speed Value", 16, 1, 500, function(v)
@@ -1409,6 +1342,16 @@ end)
 CharCat:AddSeparator()
 CharCat:AddToggle("Jump Height", false, function(v)
 	JumpHeightEnabled = v
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		if v then
+			OriginalJumpPower = hum.JumpPower
+		else
+			hum.UseJumpPower = true
+			hum.JumpPower = OriginalJumpPower
+		end
+	end
 	Library:Notify(`Jump Height: {v and "ON" or "OFF"}`, v and "success" or "error")
 end)
 CharCat:AddSlider("Height Value", 50, 1, 500, function(v)
@@ -1430,9 +1373,13 @@ CharCat:AddToggle("Freecam", false, function(v)
 	if v then
 		OriginalCameraSubject = cam.CameraSubject
 		FreecamCFrame = cam.CFrame
+		local rx, ry = cam.CFrame:ToEulerAnglesYXZ()
+		FreecamAngles = {x = rx, y = ry}
 		cam.CameraType = Enum.CameraType.Scriptable
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 	else
 		cam.CameraType = Enum.CameraType.Custom
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 		if OriginalCameraSubject then
 			cam.CameraSubject = OriginalCameraSubject
 		end
@@ -1492,8 +1439,8 @@ PlayersCat:AddToggle("Spectate", false, function(v)
 	end
 end)
 
--- --- Server features in Misc ---
-Misc:AddSeparator()
+-- --- Misc category ---
+local Misc = Library:AddCategory("Misc", "wrench")
 Misc:AddButton("Rejoin", function()
 	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
 	Library:Notify("Rejoining...", "warning")
@@ -1575,180 +1522,7 @@ BFCat:AddSlider("Cast Delay 2", 35, 10, 100, function(v)
 end)
 
 -- ============================================================
--- SILENT AIM INTEGRATION
--- ============================================================
-
--- Bone mapping
-local BoneMap = {
-	["Head"] = {"Hitbox_Head", "Head"},
-	["Torso"] = {"Hitbox_Torso", "HumanoidRootPart"},
-	["Left Arm"] = {"Hitbox_Left Arm", "Left Arm", "LeftHand"},
-	["Right Arm"] = {"Hitbox_Right Arm", "Right Arm", "RightHand"},
-	["Left Leg"] = {"Hitbox_Left Leg", "Left Leg", "LeftFoot"},
-	["Right Leg"] = {"Hitbox_Right Leg", "Right Leg", "RightFoot"},
-}
-
-local function FindInHitboxFolder(Character, BoneName)
-	local HitboxFolder = Character:FindFirstChild("Hitbox")
-	if HitboxFolder then
-		local Part = HitboxFolder:FindFirstChild(BoneName)
-		if Part then
-			return Part
-		end
-	end
-	return Character:FindFirstChild(BoneName) or Character:FindFirstChild(BoneName, true)
-end
-
-local function GetTargetPart(Character)
-	if TargetBone == "Random" then
-		local ValidParts = {}
-		for _, BoneList in BoneMap do
-			for _, BoneName in BoneList do
-				local Part = FindInHitboxFolder(Character, BoneName)
-				if Part then
-					table.insert(ValidParts, Part)
-					break
-				end
-			end
-		end
-		if #ValidParts > 0 then
-			return ValidParts[math.random(1, #ValidParts)]
-		end
-		return nil
-	end
-	local BoneList = BoneMap[TargetBone] or BoneMap["Head"]
-	for _, BoneName in BoneList do
-		local Part = FindInHitboxFolder(Character, BoneName)
-		if Part then
-			return Part
-		end
-	end
-	return nil
-end
-
-local function IsAlive(Character)
-	if not Character then return false end
-	if not Character:IsDescendantOf(workspace) then return false end
-	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
-	if not Humanoid or Humanoid.Health <= 0 then return false end
-	if Character:FindFirstChildOfClass("ForceField") or Character:FindFirstChild("ForceField") then return false end
-	if not Character:GetAttribute("deployed") then return false end
-	return true
-end
-
-local function IsVisible(FromPosition, Character, TargetPart)
-	local Direction = (TargetPart.Position - FromPosition).Unit
-	local Distance = (TargetPart.Position - FromPosition).Magnitude
-	local Params = RaycastParams.new()
-	Params.FilterType = Enum.RaycastFilterType.Exclude
-	local MyChar = LocalPlayer.Character
-	local Effects = workspace:FindFirstChild("Effects")
-	local FilterList = {}
-	if MyChar then table.insert(FilterList, MyChar) end
-	if Effects then table.insert(FilterList, Effects) end
-	Params.FilterDescendantsInstances = FilterList
-	local RayResult = workspace:Raycast(FromPosition, Direction * Distance, Params)
-	if not RayResult then return true end
-	local HitModel = RayResult.Instance:FindFirstAncestorWhichIsA("Model")
-	return HitModel == Character
-end
-
-local function ShouldTargetPlayer(Player)
-	if Player == LocalPlayer then return false end
-	local Character = Player.Character
-	if not Character then return false end
-	if not IsAlive(Character) then return false end
-	return true
-end
-
-local function GetNearestTarget()
-	local Camera = workspace.CurrentCamera
-	local BestTarget = nil
-	local BestDistance = math.huge
-	local BestPart = nil
-	local ViewportSize = Camera.ViewportSize
-	local ScreenCenter = Vector2.new(ViewportSize.X / 2, ViewportSize.Y / 2)
-	local MyChar = LocalPlayer.Character
-	local MyHead = MyChar and MyChar:FindFirstChild("Head")
-
-	for _, Player in Players:GetPlayers() do
-		if ShouldTargetPlayer(Player) then
-			local Character = Player.Character
-			local HitPart = GetTargetPart(Character)
-			if HitPart then
-				local ScreenPos, OnScreen = Camera:WorldToViewportPoint(HitPart.Position)
-				if OnScreen then
-					local Distance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - ScreenCenter).Magnitude
-					if Distance < FOVRadius and Distance < BestDistance then
-						if MyHead and IsVisible(MyHead.Position, Character, HitPart) then
-							BestDistance = Distance
-							BestTarget = Character
-							BestPart = HitPart
-						end
-					end
-				end
-			end
-		end
-	end
-
-	return BestTarget, BestPart
-end
-
-local function RollHitChance()
-	if HitChance >= 100 then return true end
-	return math.random(1, 100) <= HitChance
-end
-
--- Hook weapon packet (protected)
-pcall(function()
-	local WeaponPackets = require(ReplicatedStorage.Common.Packets.WeaponPackets)
-	local OriginalSend = WeaponPackets.useWeapon.send
-
-	WeaponPackets.useWeapon.send = function(Data)
-		if SilentAimEnabled and RollHitChance() then
-			local TargetCharacter, TargetPart = GetNearestTarget()
-			if TargetCharacter and TargetPart then
-				Data.hitResult = TargetCharacter
-				Data.hitPart = TargetPart
-				Data.position = TargetPart.Position
-				Data.direction = (TargetPart.Position - Data.origin).Unit
-			end
-		end
-		return OriginalSend(Data)
-	end
-end)
-
--- FOV circle & target dot render loop
-RunService.RenderStepped:Connect(function()
-	local Camera = workspace.CurrentCamera
-	local ScreenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-
-	if FOVCircle then
-		FOVCircle.Position = ScreenCenter
-		FOVCircle.Radius = FOVRadius
-		FOVCircle.Visible = FOVVisible and SilentAimEnabled
-	end
-
-	if SilentAimEnabled then
-		local _, TargetPart = GetNearestTarget()
-		if TargetPart and TargetDot then
-			local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
-			if OnScreen then
-				TargetDot.Position = Vector2.new(ScreenPos.X, ScreenPos.Y)
-				TargetDot.Visible = true
-			else
-				TargetDot.Visible = false
-			end
-		elseif TargetDot then
-			TargetDot.Visible = false
-		end
-	elseif TargetDot then
-		TargetDot.Visible = false
-	end
-end)
-
--- ============================================================
--- ORCA FEATURES — GAME LOGIC LOOPS
+-- GAME LOGIC LOOPS
 -- ============================================================
 
 -- Flight movement
@@ -1794,25 +1568,35 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- Freecam movement
+-- Freecam movement + mouse look
+local FREECAM_SENSITIVITY = 0.003
+UserInputService.InputChanged:Connect(function(input)
+	if FreecamEnabled and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Delta
+		FreecamAngles.y = FreecamAngles.y - delta.X * FREECAM_SENSITIVITY
+		FreecamAngles.x = math.clamp(FreecamAngles.x - delta.Y * FREECAM_SENSITIVITY, -math.pi / 2 + 0.01, math.pi / 2 - 0.01)
+	end
+end)
+
 RunService.RenderStepped:Connect(function(dt)
 	if FreecamEnabled and FreecamCFrame then
 		local cam = Workspace.CurrentCamera
+		cam.CameraType = Enum.CameraType.Scriptable
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 		local speed = FreecamSpeed * 60 * dt
+		local rotation = CFrame.Angles(FreecamAngles.x, FreecamAngles.y, 0)
 		local moveDir = Vector3.zero
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + FreecamCFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - FreecamCFrame.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - FreecamCFrame.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + FreecamCFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + rotation.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - rotation.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - rotation.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + rotation.RightVector end
 		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
 		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+		local pos = FreecamCFrame.Position
 		if moveDir.Magnitude > 0 then
-			FreecamCFrame = FreecamCFrame + moveDir.Unit * speed
+			pos = pos + moveDir.Unit * speed
 		end
-		-- Apply mouse look from current camera
-		local _, ry = cam.CFrame:ToEulerAnglesYXZ()
-		local rx, _ = cam.CFrame:ToEulerAnglesYXZ()
-		FreecamCFrame = CFrame.new(FreecamCFrame.Position) * CFrame.Angles(rx, ry, 0)
+		FreecamCFrame = CFrame.new(pos) * rotation
 		cam.CFrame = FreecamCFrame
 	end
 end)
