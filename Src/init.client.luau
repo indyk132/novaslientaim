@@ -466,6 +466,54 @@ CreateSettingsDropdown(GeneralSection, "DPI Scale", { "50%", "75%", "100%", "125
 	ScreenDPIScale.Scale = (scaleNumber or 100) / 100
 end)
 
+-- Toggle GUI Key setting
+local KeybindSection = CreateSettingsSection("Keybinds")
+local toggleKeyRow = CreateSettingsRow(KeybindSection)
+
+Interface.New("TextLabel", {
+	BackgroundTransparency = 1,
+	Size = UDim2.new(1, -90, 1, 0),
+	Text = "Toggle GUI Key",
+	TextColor3 = Theme.Text,
+	TextSize = 13,
+	Font = Enum.Font.GothamMedium,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextTruncate = Enum.TextTruncate.AtEnd,
+	Parent = toggleKeyRow,
+})
+
+local toggleKeyBtn = Interface.New("TextButton", {
+	Text = ToggleKey.Name,
+	TextColor3 = Theme.TextMuted,
+	TextSize = 11,
+	Font = Enum.Font.GothamBold,
+	BackgroundColor3 = Theme.SurfaceHover,
+	BorderSizePixel = 0,
+	Size = UDim2.new(0, 80, 0, 24),
+	Position = UDim2.new(1, -80, 0.5, 0),
+	AnchorPoint = Vector2.new(0, 0.5),
+	AutoButtonColor = false,
+	Parent = toggleKeyRow,
+	["UICorner"] = { CornerRadius = UDim.new(0, 4) },
+})
+
+local isListeningToggleKey = false
+toggleKeyBtn.MouseButton1Click:Connect(function()
+	isListeningToggleKey = true
+	toggleKeyBtn.Text = "..."
+	toggleKeyBtn.TextColor3 = Theme.Accent
+end)
+
+UserInputService.InputBegan:Connect(function(input)
+	if not isListeningToggleKey then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		isListeningToggleKey = false
+		ToggleKey = input.KeyCode
+		toggleKeyBtn.Text = ToggleKey.Name
+		toggleKeyBtn.TextColor3 = Theme.TextMuted
+	end
+end)
+
 -- Unload button
 local DangerSection = CreateSettingsSection("Danger Zone")
 local unloadRow = CreateSettingsRow(DangerSection)
@@ -1196,10 +1244,10 @@ function Library:Toggle()
 	MainFrame.Visible = not MainFrame.Visible
 end
 
--- Toggle keybind (RightShift)
+-- Toggle keybind
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.RightShift then
+	if input.KeyCode == ToggleKey then
 		Library:Toggle()
 	end
 end)
@@ -1217,10 +1265,11 @@ local WeaponPackets = require(ReplicatedStorage.Common.Packets.WeaponPackets)
 
 -- Silent Aim State
 local SilentAimEnabled = true
-local FOVRadius = 9999
+local FOVRadius = 150
 local FOVVisible = false
 local TargetBone = "Head"
 local HitChance = 100
+local ToggleKey = Enum.KeyCode.RightShift
 
 -- Drawing objects
 local FOVCircle = Drawing.new("Circle")
@@ -1438,31 +1487,12 @@ end)
 Visuals:AddSlider("Target Dot Size", 4, 1, 10, function(v)
 	TargetDot.Radius = v
 end)
-Visuals:AddButton("Set FOV Color Red", function()
-	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
-	TargetDot.Color = Color3.fromRGB(240, 60, 60)
-	Library:Notify("Color set to Red", "success")
-end)
-Visuals:AddButton("Set FOV Color Blue", function()
-	FOVCircle.Color = Color3.fromRGB(60, 120, 240)
-	TargetDot.Color = Color3.fromRGB(60, 120, 240)
-	Library:Notify("Color set to Blue", "success")
-end)
-Visuals:AddButton("Set FOV Color Green", function()
-	FOVCircle.Color = Color3.fromRGB(60, 240, 80)
-	TargetDot.Color = Color3.fromRGB(60, 240, 80)
-	Library:Notify("Color set to Green", "success")
-end)
 
 -- Misc category
 local Misc = Library:AddCategory("Misc", "wrench")
-Misc:AddKeybind("Toggle GUI Key", Enum.KeyCode.RightShift, function(key)
-	Library:Notify(`Toggle key set: {key.Name}`)
-end)
-Misc:AddSeparator()
 Misc:AddButton("Reset Settings", function()
 	SilentAimEnabled = true
-	FOVRadius = 9999
+	FOVRadius = 150
 	FOVVisible = false
 	TargetBone = "Head"
 	HitChance = 100
@@ -1471,15 +1501,6 @@ Misc:AddButton("Reset Settings", function()
 	TargetDot.Color = Color3.fromRGB(240, 60, 60)
 	TargetDot.Radius = 4
 	Library:Notify("Settings reset to default!", "warning")
-end)
-Misc:AddButton("Unload Script", function()
-	SilentAimEnabled = false
-	FOVCircle.Visible = false
-	TargetDot.Visible = false
-	FOVCircle:Remove()
-	TargetDot:Remove()
-	WeaponPackets.useWeapon.send = OriginalSend
-	Library:Destroy()
 end)
 
 Library:Notify("Nova Silent Aim loaded!", "success")

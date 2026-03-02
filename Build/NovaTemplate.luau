@@ -13,63 +13,109 @@ local ImportGlobals
 
 -- Holds direct closure data (defining this before the DOM tree for line debugging etc)
 local ClosureBindings = {
-    [10] = function()local wax,script,require=ImportGlobals(10)local ImportGlobals return (function(...)--[[
-	Theme Module - Template (Based on Nova)
-	Centralized color definitions for consistent UI theming.
+    [6] = function()local wax,script,require=ImportGlobals(6)local ImportGlobals return (function(...)--[[
+	Icons Module - Template
+	Fetches and manages Lucide icons for the UI.
+	Uses deividcomsono's lucide-roblox-direct for icon spritesheet.
 	
 	Usage:
-		local Theme = require(path.to.Theme)
-		frame.BackgroundColor3 = Theme.Background
+		local Icons = require(path.to.Icons)
+		
+		-- Apply icon to ImageLabel
+		Icons.ApplyIcon(imageLabel, "settings")
+		Icons.ApplyIcon(imageLabel, "home")
+		
+		-- Get icon data
+		local iconData = Icons.GetIcon("user")
+		if iconData then
+			print(iconData.Url, iconData.ImageRectOffset, iconData.ImageRectSize)
+		end
 ]]
 
-local Theme = {
-	-- Base colors
-	Background = Color3.fromRGB(15, 15, 15),
-	Surface = Color3.fromRGB(20, 20, 20),
-	SurfaceHover = Color3.fromRGB(28, 28, 28),
-	
-	-- Border colors
-	Border = Color3.fromRGB(40, 40, 40),
-	BorderLight = Color3.fromRGB(55, 55, 55),
-	
-	-- Text colors
-	Text = Color3.fromRGB(220, 220, 220),
-	TextMuted = Color3.fromRGB(140, 140, 140),
-	
-	-- Accent colors
-	Accent = Color3.fromRGB(88, 101, 242),
-	AccentHover = Color3.fromRGB(98, 111, 252),
-	
-	-- Status colors
-	Success = Color3.fromRGB(63, 185, 80),
-	Warning = Color3.fromRGB(210, 153, 34),
-	Error = Color3.fromRGB(248, 81, 73),
-	Info = Color3.fromRGB(88, 166, 255),
-	
-	-- Direction colors (from Nova's Incoming/Outgoing)
-	Primary = Color3.fromRGB(63, 185, 80),
-	Secondary = Color3.fromRGB(247, 129, 102),
+local Icons = {}
+
+export type IconData = {
+	Url: string,
+	Id: number,
+	IconName: string,
+	ImageRectOffset: Vector2,
+	ImageRectSize: Vector2,
 }
 
--- Utility function to lighten a color
-function Theme.Lighten(color: Color3, amount: number): Color3
-	return Color3.new(
-		math.min(color.R + amount, 1),
-		math.min(color.G + amount, 1),
-		math.min(color.B + amount, 1)
+-- Try to load the icons module
+local Success, IconsModule = pcall(function()
+	local IconFetchSuccess, IconModuleSource = pcall(request, {
+		Url = "https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua",
+		Method = "GET",
+	})
+
+	assert(
+		IconFetchSuccess and IconModuleSource.Success or IconModuleSource.StatusCode >= 200 and IconModuleSource.StatusCode < 300,
+		"Failed to fetch lucide icons direct module source"
 	)
+	return (loadstring(IconModuleSource.Body) :: () -> { Icons: { string }, GetAsset: (Name: string) -> IconData? })()
+end)
+
+if not Success then
+	warn("[Icons] Failed to load Lucide icons module. Icons will not be available.")
 end
 
--- Utility function to darken a color
-function Theme.Darken(color: Color3, amount: number): Color3
-	return Color3.new(
-		math.max(color.R - amount, 0),
-		math.max(color.G - amount, 0),
-		math.max(color.B - amount, 0)
-	)
+--[[
+	Get icon data by name
+	@param iconName The name of the Lucide icon
+	@return IconData or nil if not found
+]]
+function Icons.GetIcon(iconName: string): IconData?
+	if not Success or not IconsModule then
+		return nil
+	end
+
+	local success, icon = pcall(IconsModule.GetAsset, iconName)
+	if not success then
+		return nil
+	end
+
+	return icon
 end
 
-return Theme
+--[[
+	Apply icon to an ImageLabel
+	@param imageLabel The ImageLabel to apply the icon to
+	@param iconName The name of the Lucide icon
+	@return boolean indicating success
+]]
+function Icons.ApplyIcon(imageLabel: ImageLabel, iconName: string): boolean
+	local icon = Icons.GetIcon(iconName)
+	if not icon then
+		return false
+	end
+
+	imageLabel.Image = icon.Url
+	imageLabel.ImageRectOffset = icon.ImageRectOffset
+	imageLabel.ImageRectSize = icon.ImageRectSize
+	return true
+end
+
+--[[
+	Check if icons are available
+	@return boolean
+]]
+function Icons.IsAvailable(): boolean
+	return Success and IconsModule ~= nil
+end
+
+--[[
+	Get list of all available icon names
+	@return Array of icon names or empty array if not loaded
+]]
+function Icons.GetAllIconNames(): { string }
+	if not Success or not IconsModule or not IconsModule.Icons then
+		return {}
+	end
+	return IconsModule.Icons
+end
+
+return Icons
 
 end)() end,
     [2] = function()local wax,script,require=ImportGlobals(2)local ImportGlobals return (function(...)--[[
@@ -538,6 +584,54 @@ local GeneralSection = CreateSettingsSection("General")
 CreateSettingsDropdown(GeneralSection, "DPI Scale", { "50%", "75%", "100%", "125%", "150%" }, "100%", function(value)
 	local scaleNumber = tonumber(string.match(value, "%d+"))
 	ScreenDPIScale.Scale = (scaleNumber or 100) / 100
+end)
+
+-- Toggle GUI Key setting
+local KeybindSection = CreateSettingsSection("Keybinds")
+local toggleKeyRow = CreateSettingsRow(KeybindSection)
+
+Interface.New("TextLabel", {
+	BackgroundTransparency = 1,
+	Size = UDim2.new(1, -90, 1, 0),
+	Text = "Toggle GUI Key",
+	TextColor3 = Theme.Text,
+	TextSize = 13,
+	Font = Enum.Font.GothamMedium,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextTruncate = Enum.TextTruncate.AtEnd,
+	Parent = toggleKeyRow,
+})
+
+local toggleKeyBtn = Interface.New("TextButton", {
+	Text = ToggleKey.Name,
+	TextColor3 = Theme.TextMuted,
+	TextSize = 11,
+	Font = Enum.Font.GothamBold,
+	BackgroundColor3 = Theme.SurfaceHover,
+	BorderSizePixel = 0,
+	Size = UDim2.new(0, 80, 0, 24),
+	Position = UDim2.new(1, -80, 0.5, 0),
+	AnchorPoint = Vector2.new(0, 0.5),
+	AutoButtonColor = false,
+	Parent = toggleKeyRow,
+	["UICorner"] = { CornerRadius = UDim.new(0, 4) },
+})
+
+local isListeningToggleKey = false
+toggleKeyBtn.MouseButton1Click:Connect(function()
+	isListeningToggleKey = true
+	toggleKeyBtn.Text = "..."
+	toggleKeyBtn.TextColor3 = Theme.Accent
+end)
+
+UserInputService.InputBegan:Connect(function(input)
+	if not isListeningToggleKey then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		isListeningToggleKey = false
+		ToggleKey = input.KeyCode
+		toggleKeyBtn.Text = ToggleKey.Name
+		toggleKeyBtn.TextColor3 = Theme.TextMuted
+	end
 end)
 
 -- Unload button
@@ -1270,10 +1364,10 @@ function Library:Toggle()
 	MainFrame.Visible = not MainFrame.Visible
 end
 
--- Toggle keybind (RightShift)
+-- Toggle keybind
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.RightShift then
+	if input.KeyCode == ToggleKey then
 		Library:Toggle()
 	end
 end)
@@ -1291,10 +1385,11 @@ local WeaponPackets = require(ReplicatedStorage.Common.Packets.WeaponPackets)
 
 -- Silent Aim State
 local SilentAimEnabled = true
-local FOVRadius = 9999
+local FOVRadius = 150
 local FOVVisible = false
 local TargetBone = "Head"
 local HitChance = 100
+local ToggleKey = Enum.KeyCode.RightShift
 
 -- Drawing objects
 local FOVCircle = Drawing.new("Circle")
@@ -1512,31 +1607,12 @@ end)
 Visuals:AddSlider("Target Dot Size", 4, 1, 10, function(v)
 	TargetDot.Radius = v
 end)
-Visuals:AddButton("Set FOV Color Red", function()
-	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
-	TargetDot.Color = Color3.fromRGB(240, 60, 60)
-	Library:Notify("Color set to Red", "success")
-end)
-Visuals:AddButton("Set FOV Color Blue", function()
-	FOVCircle.Color = Color3.fromRGB(60, 120, 240)
-	TargetDot.Color = Color3.fromRGB(60, 120, 240)
-	Library:Notify("Color set to Blue", "success")
-end)
-Visuals:AddButton("Set FOV Color Green", function()
-	FOVCircle.Color = Color3.fromRGB(60, 240, 80)
-	TargetDot.Color = Color3.fromRGB(60, 240, 80)
-	Library:Notify("Color set to Green", "success")
-end)
 
 -- Misc category
 local Misc = Library:AddCategory("Misc", "wrench")
-Misc:AddKeybind("Toggle GUI Key", Enum.KeyCode.RightShift, function(key)
-	Library:Notify(`Toggle key set: {key.Name}`)
-end)
-Misc:AddSeparator()
 Misc:AddButton("Reset Settings", function()
 	SilentAimEnabled = true
-	FOVRadius = 9999
+	FOVRadius = 150
 	FOVVisible = false
 	TargetBone = "Head"
 	HitChance = 100
@@ -1546,124 +1622,10 @@ Misc:AddButton("Reset Settings", function()
 	TargetDot.Radius = 4
 	Library:Notify("Settings reset to default!", "warning")
 end)
-Misc:AddButton("Unload Script", function()
-	SilentAimEnabled = false
-	FOVCircle.Visible = false
-	TargetDot.Visible = false
-	FOVCircle:Remove()
-	TargetDot:Remove()
-	WeaponPackets.useWeapon.send = OriginalSend
-	Library:Destroy()
-end)
 
 Library:Notify("Nova Silent Aim loaded!", "success")
 
 return Library
-
-end)() end,
-    [6] = function()local wax,script,require=ImportGlobals(6)local ImportGlobals return (function(...)--[[
-	Icons Module - Template
-	Fetches and manages Lucide icons for the UI.
-	Uses deividcomsono's lucide-roblox-direct for icon spritesheet.
-	
-	Usage:
-		local Icons = require(path.to.Icons)
-		
-		-- Apply icon to ImageLabel
-		Icons.ApplyIcon(imageLabel, "settings")
-		Icons.ApplyIcon(imageLabel, "home")
-		
-		-- Get icon data
-		local iconData = Icons.GetIcon("user")
-		if iconData then
-			print(iconData.Url, iconData.ImageRectOffset, iconData.ImageRectSize)
-		end
-]]
-
-local Icons = {}
-
-export type IconData = {
-	Url: string,
-	Id: number,
-	IconName: string,
-	ImageRectOffset: Vector2,
-	ImageRectSize: Vector2,
-}
-
--- Try to load the icons module
-local Success, IconsModule = pcall(function()
-	local IconFetchSuccess, IconModuleSource = pcall(request, {
-		Url = "https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua",
-		Method = "GET",
-	})
-
-	assert(
-		IconFetchSuccess and IconModuleSource.Success or IconModuleSource.StatusCode >= 200 and IconModuleSource.StatusCode < 300,
-		"Failed to fetch lucide icons direct module source"
-	)
-	return (loadstring(IconModuleSource.Body) :: () -> { Icons: { string }, GetAsset: (Name: string) -> IconData? })()
-end)
-
-if not Success then
-	warn("[Icons] Failed to load Lucide icons module. Icons will not be available.")
-end
-
---[[
-	Get icon data by name
-	@param iconName The name of the Lucide icon
-	@return IconData or nil if not found
-]]
-function Icons.GetIcon(iconName: string): IconData?
-	if not Success or not IconsModule then
-		return nil
-	end
-
-	local success, icon = pcall(IconsModule.GetAsset, iconName)
-	if not success then
-		return nil
-	end
-
-	return icon
-end
-
---[[
-	Apply icon to an ImageLabel
-	@param imageLabel The ImageLabel to apply the icon to
-	@param iconName The name of the Lucide icon
-	@return boolean indicating success
-]]
-function Icons.ApplyIcon(imageLabel: ImageLabel, iconName: string): boolean
-	local icon = Icons.GetIcon(iconName)
-	if not icon then
-		return false
-	end
-
-	imageLabel.Image = icon.Url
-	imageLabel.ImageRectOffset = icon.ImageRectOffset
-	imageLabel.ImageRectSize = icon.ImageRectSize
-	return true
-end
-
---[[
-	Check if icons are available
-	@return boolean
-]]
-function Icons.IsAvailable(): boolean
-	return Success and IconsModule ~= nil
-end
-
---[[
-	Get list of all available icon names
-	@return Array of icon names or empty array if not loaded
-]]
-function Icons.GetAllIconNames(): { string }
-	if not Success or not IconsModule or not IconsModule.Icons then
-		return {}
-	end
-	return IconsModule.Icons
-end
-
-return Icons
 
 end)() end,
     [7] = function()local wax,script,require=ImportGlobals(7)local ImportGlobals return (function(...)--[[
@@ -1868,145 +1830,6 @@ function Interface.CreateScrollingFrame(properties: { [string]: any }): Scrollin
 end
 
 return Interface
-
-end)() end,
-    [8] = function()local wax,script,require=ImportGlobals(8)local ImportGlobals return (function(...)--[[
-	Resize Module - Template
-	Enables resize functionality on UI frames.
-	
-	Usage:
-		local Resize = require(path.to.Resize)
-		
-		Resize.new({
-			MainFrame = mainFrame,
-			MinimumSize = Vector2.new(300, 200),
-			MaximumSize = UDim2.fromOffset(800, 600),
-		})
-]]
-
-local Resize = {}
-Resize.__index = Resize
-
-local UserInputService = game:GetService("UserInputService")
-
-local HANDLE_SIZE = 6
-local CORNER_HANDLE_SIZE = 20
-
-export type ResizeOptions = {
-	MainFrame: Frame,
-	MinimumSize: Vector2? | UDim2?,
-	MaximumSize: UDim2?,
-	HandleSize: number?,
-	CornerHandleSize: number?,
-	Mirrored: boolean?,
-}
-
-export type ResizeObject = {
-	MainFrame: Frame,
-	ResizeHandle: TextButton,
-	Enabled: boolean,
-	SetEnabled: (self: ResizeObject, enabled: boolean) -> (),
-	Destroy: (self: ResizeObject) -> (),
-}
-
---[[
-	Create a new resizable frame
-	@param options Configuration options
-	@return ResizeObject
-]]
-function Resize.new(options: ResizeOptions): ResizeObject
-	local MainFrame = options.MainFrame
-	local HandleSize = options.HandleSize or HANDLE_SIZE
-	local CornerHandleSize = options.CornerHandleSize or CORNER_HANDLE_SIZE
-	local Mirrored = options.Mirrored or false
-
-	local MinimumSize
-	if typeof(options.MinimumSize) == "Vector2" then
-		MinimumSize = UDim2.fromOffset(options.MinimumSize.X, options.MinimumSize.Y)
-	elseif typeof(options.MinimumSize) == "UDim2" then
-		MinimumSize = options.MinimumSize
-	else
-		MinimumSize = UDim2.fromOffset(200, 150)
-	end
-
-	local MaximumSize = options.MaximumSize or UDim2.fromOffset(9999, 9999)
-
-	local self = setmetatable({}, Resize)
-	self.MainFrame = MainFrame
-	self.Enabled = true
-
-	-- Bottom-right corner resize handle
-	local ResizeHandle = Instance.new("TextButton")
-	ResizeHandle.Text = ""
-	ResizeHandle.BackgroundTransparency = 1
-	ResizeHandle.Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize)
-	ResizeHandle.Position = UDim2.new(1, -CornerHandleSize, 1, -CornerHandleSize)
-	ResizeHandle.ZIndex = 100
-	ResizeHandle.Parent = MainFrame
-
-	self.ResizeHandle = ResizeHandle
-
-	local dragging = false
-	local dragStart = nil
-	local startSize = nil
-	local connections = {}
-
-	table.insert(connections, ResizeHandle.InputBegan:Connect(function(input)
-		if not self.Enabled then return end
-		
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			dragStart = input.Position
-			startSize = MainFrame.Size
-
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
-		end
-	end))
-
-	table.insert(connections, UserInputService.InputChanged:Connect(function(input)
-		if not self.Enabled then return end
-		
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local delta = input.Position - dragStart
-			local newWidth = math.clamp(
-				startSize.X.Offset + (Mirrored and -delta.X or delta.X),
-				MinimumSize.X.Offset,
-				MaximumSize.X.Offset
-			)
-			local newHeight = math.clamp(
-				startSize.Y.Offset + (Mirrored and -delta.Y or delta.Y),
-				MinimumSize.Y.Offset,
-				MaximumSize.Y.Offset
-			)
-
-			MainFrame.Size = UDim2.fromOffset(newWidth, newHeight)
-		end
-	end))
-
-	function self:SetEnabled(enabled: boolean)
-		self.Enabled = enabled
-		ResizeHandle.Visible = enabled
-		if not enabled then
-			dragging = false
-		end
-	end
-
-	function self:Destroy()
-		for _, connection in ipairs(connections) do
-			connection:Disconnect()
-		end
-		connections = {}
-		ResizeHandle:Destroy()
-	end
-
-	return self
-end
-
-return Resize
 
 end)() end,
     [9] = function()local wax,script,require=ImportGlobals(9)local ImportGlobals return (function(...)--[[
@@ -2235,6 +2058,204 @@ function Sonner.clear()
 end
 
 return Sonner
+
+end)() end,
+    [8] = function()local wax,script,require=ImportGlobals(8)local ImportGlobals return (function(...)--[[
+	Resize Module - Template
+	Enables resize functionality on UI frames.
+	
+	Usage:
+		local Resize = require(path.to.Resize)
+		
+		Resize.new({
+			MainFrame = mainFrame,
+			MinimumSize = Vector2.new(300, 200),
+			MaximumSize = UDim2.fromOffset(800, 600),
+		})
+]]
+
+local Resize = {}
+Resize.__index = Resize
+
+local UserInputService = game:GetService("UserInputService")
+
+local HANDLE_SIZE = 6
+local CORNER_HANDLE_SIZE = 20
+
+export type ResizeOptions = {
+	MainFrame: Frame,
+	MinimumSize: Vector2? | UDim2?,
+	MaximumSize: UDim2?,
+	HandleSize: number?,
+	CornerHandleSize: number?,
+	Mirrored: boolean?,
+}
+
+export type ResizeObject = {
+	MainFrame: Frame,
+	ResizeHandle: TextButton,
+	Enabled: boolean,
+	SetEnabled: (self: ResizeObject, enabled: boolean) -> (),
+	Destroy: (self: ResizeObject) -> (),
+}
+
+--[[
+	Create a new resizable frame
+	@param options Configuration options
+	@return ResizeObject
+]]
+function Resize.new(options: ResizeOptions): ResizeObject
+	local MainFrame = options.MainFrame
+	local HandleSize = options.HandleSize or HANDLE_SIZE
+	local CornerHandleSize = options.CornerHandleSize or CORNER_HANDLE_SIZE
+	local Mirrored = options.Mirrored or false
+
+	local MinimumSize
+	if typeof(options.MinimumSize) == "Vector2" then
+		MinimumSize = UDim2.fromOffset(options.MinimumSize.X, options.MinimumSize.Y)
+	elseif typeof(options.MinimumSize) == "UDim2" then
+		MinimumSize = options.MinimumSize
+	else
+		MinimumSize = UDim2.fromOffset(200, 150)
+	end
+
+	local MaximumSize = options.MaximumSize or UDim2.fromOffset(9999, 9999)
+
+	local self = setmetatable({}, Resize)
+	self.MainFrame = MainFrame
+	self.Enabled = true
+
+	-- Bottom-right corner resize handle
+	local ResizeHandle = Instance.new("TextButton")
+	ResizeHandle.Text = ""
+	ResizeHandle.BackgroundTransparency = 1
+	ResizeHandle.Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize)
+	ResizeHandle.Position = UDim2.new(1, -CornerHandleSize, 1, -CornerHandleSize)
+	ResizeHandle.ZIndex = 100
+	ResizeHandle.Parent = MainFrame
+
+	self.ResizeHandle = ResizeHandle
+
+	local dragging = false
+	local dragStart = nil
+	local startSize = nil
+	local connections = {}
+
+	table.insert(connections, ResizeHandle.InputBegan:Connect(function(input)
+		if not self.Enabled then return end
+		
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startSize = MainFrame.Size
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end))
+
+	table.insert(connections, UserInputService.InputChanged:Connect(function(input)
+		if not self.Enabled then return end
+		
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			local newWidth = math.clamp(
+				startSize.X.Offset + (Mirrored and -delta.X or delta.X),
+				MinimumSize.X.Offset,
+				MaximumSize.X.Offset
+			)
+			local newHeight = math.clamp(
+				startSize.Y.Offset + (Mirrored and -delta.Y or delta.Y),
+				MinimumSize.Y.Offset,
+				MaximumSize.Y.Offset
+			)
+
+			MainFrame.Size = UDim2.fromOffset(newWidth, newHeight)
+		end
+	end))
+
+	function self:SetEnabled(enabled: boolean)
+		self.Enabled = enabled
+		ResizeHandle.Visible = enabled
+		if not enabled then
+			dragging = false
+		end
+	end
+
+	function self:Destroy()
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+		connections = {}
+		ResizeHandle:Destroy()
+	end
+
+	return self
+end
+
+return Resize
+
+end)() end,
+    [10] = function()local wax,script,require=ImportGlobals(10)local ImportGlobals return (function(...)--[[
+	Theme Module - Template (Based on Nova)
+	Centralized color definitions for consistent UI theming.
+	
+	Usage:
+		local Theme = require(path.to.Theme)
+		frame.BackgroundColor3 = Theme.Background
+]]
+
+local Theme = {
+	-- Base colors
+	Background = Color3.fromRGB(15, 15, 15),
+	Surface = Color3.fromRGB(20, 20, 20),
+	SurfaceHover = Color3.fromRGB(28, 28, 28),
+	
+	-- Border colors
+	Border = Color3.fromRGB(40, 40, 40),
+	BorderLight = Color3.fromRGB(55, 55, 55),
+	
+	-- Text colors
+	Text = Color3.fromRGB(220, 220, 220),
+	TextMuted = Color3.fromRGB(140, 140, 140),
+	
+	-- Accent colors
+	Accent = Color3.fromRGB(88, 101, 242),
+	AccentHover = Color3.fromRGB(98, 111, 252),
+	
+	-- Status colors
+	Success = Color3.fromRGB(63, 185, 80),
+	Warning = Color3.fromRGB(210, 153, 34),
+	Error = Color3.fromRGB(248, 81, 73),
+	Info = Color3.fromRGB(88, 166, 255),
+	
+	-- Direction colors (from Nova's Incoming/Outgoing)
+	Primary = Color3.fromRGB(63, 185, 80),
+	Secondary = Color3.fromRGB(247, 129, 102),
+}
+
+-- Utility function to lighten a color
+function Theme.Lighten(color: Color3, amount: number): Color3
+	return Color3.new(
+		math.min(color.R + amount, 1),
+		math.min(color.G + amount, 1),
+		math.min(color.B + amount, 1)
+	)
+end
+
+-- Utility function to darken a color
+function Theme.Darken(color: Color3, amount: number): Color3
+	return Color3.new(
+		math.max(color.R - amount, 0),
+		math.max(color.G - amount, 0),
+		math.max(color.B - amount, 0)
+	)
+end
+
+return Theme
 
 end)() end,
     [5] = function()local wax,script,require=ImportGlobals(5)local ImportGlobals return (function(...)--[[
@@ -2548,17 +2569,10 @@ local ObjectTree = {
                         },
                         {
                             {
-                                9,
+                                8,
                                 2,
                                 {
-                                    "Sonner"
-                                }
-                            },
-                            {
-                                4,
-                                2,
-                                {
-                                    "Drag"
+                                    "Resize"
                                 }
                             },
                             {
@@ -2569,6 +2583,13 @@ local ObjectTree = {
                                 }
                             },
                             {
+                                6,
+                                2,
+                                {
+                                    "Icons"
+                                }
+                            },
+                            {
                                 10,
                                 2,
                                 {
@@ -2576,24 +2597,24 @@ local ObjectTree = {
                                 }
                             },
                             {
+                                4,
+                                2,
+                                {
+                                    "Drag"
+                                }
+                            },
+                            {
+                                9,
+                                2,
+                                {
+                                    "Sonner"
+                                }
+                            },
+                            {
                                 7,
                                 2,
                                 {
                                     "Interface"
-                                }
-                            },
-                            {
-                                8,
-                                2,
-                                {
-                                    "Resize"
-                                }
-                            },
-                            {
-                                6,
-                                2,
-                                {
-                                    "Icons"
                                 }
                             }
                         }
@@ -2606,14 +2627,14 @@ local ObjectTree = {
 
 -- Line offsets for debugging (only included when minifyTables is false)
 local LineOffsets = {
-    [6] = 1556,
-    [2] = 67,
-    [7] = 1661,
-    [10] = 8,
-    [8] = 1865,
-    [9] = 2004,
-    [5] = 2232,
-    [4] = 2414
+    [7] = 1623,
+    [9] = 1827,
+    [2] = 113,
+    [6] = 8,
+    [8] = 2055,
+    [10] = 2194,
+    [5] = 2253,
+    [4] = 2435
 }
 
 -- Misc AOT variable imports
