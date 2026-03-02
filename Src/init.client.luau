@@ -1524,6 +1524,57 @@ Misc:AddButton("Copy Job ID", function()
 end)
 
 -- ============================================================
+-- JJS BLACK FLASH
+-- ============================================================
+
+local autoBlackFlashEnabled = false
+local blackFlashBindKey = Enum.KeyCode.E
+local blackFlashDelay1 = 0.32
+local blackFlashDelay2 = 0.35
+
+local BFCat = Library:AddCategory("Black Flash", "zap")
+BFCat:AddToggle("Auto Black Flash", false, function(v)
+	autoBlackFlashEnabled = v
+	Library:Notify(`Auto Black Flash: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+BFCat:AddKeybind("Black Flash Key", Enum.KeyCode.E, function(key)
+	blackFlashBindKey = key
+	Library:Notify(`Black Flash Key: {key.Name}`, "success")
+end)
+BFCat:AddSeparator()
+BFCat:AddButton("Black Flash (once)", function()
+	task.spawn(function()
+		pcall(function()
+			local activateRE = ReplicatedStorage:WaitForChild("Knit"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("DivergentFistService"):WaitForChild("RE"):WaitForChild("Activated")
+			local chr = LocalPlayer.Character
+			if not chr then return end
+			local mset = chr:FindFirstChild("Moveset")
+			if not mset then return end
+			local dfist = mset:FindFirstChild("Divergent Fist")
+			if not dfist then return end
+			activateRE:FireServer(dfist)
+			task.wait(blackFlashDelay1)
+			chr = LocalPlayer.Character; if not chr then return end
+			mset = chr:FindFirstChild("Moveset"); if not mset then return end
+			dfist = mset:FindFirstChild("Divergent Fist"); if not dfist then return end
+			activateRE:FireServer(dfist)
+			task.wait(blackFlashDelay2)
+			chr = LocalPlayer.Character; if not chr then return end
+			mset = chr:FindFirstChild("Moveset"); if not mset then return end
+			dfist = mset:FindFirstChild("Divergent Fist"); if not dfist then return end
+			activateRE:FireServer(dfist)
+		end)
+	end)
+	Library:Notify("Black Flash fired!", "success")
+end)
+BFCat:AddSlider("Cast Delay 1", 32, 10, 100, function(v)
+	blackFlashDelay1 = v / 100
+end)
+BFCat:AddSlider("Cast Delay 2", 35, 10, 100, function(v)
+	blackFlashDelay2 = v / 100
+end)
+
+-- ============================================================
 -- SILENT AIM INTEGRATION
 -- ============================================================
 
@@ -1776,6 +1827,58 @@ RunService.Heartbeat:Connect(function()
 				Workspace.CurrentCamera.CameraSubject = hum
 			end
 		end
+	end
+end)
+
+-- Black Flash keybind listener
+UserInputService.InputBegan:Connect(function(ip, gp)
+	if gp then return end
+	if ip.KeyCode == blackFlashBindKey then
+		task.spawn(function()
+			pcall(function()
+				local activateRE = ReplicatedStorage:WaitForChild("Knit"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("DivergentFistService"):WaitForChild("RE"):WaitForChild("Activated")
+				local chr = LocalPlayer.Character; if not chr then return end
+				local mset = chr:FindFirstChild("Moveset"); if not mset then return end
+				local dfist = mset:FindFirstChild("Divergent Fist"); if not dfist then return end
+				activateRE:FireServer(dfist)
+				task.wait(blackFlashDelay1)
+				chr = LocalPlayer.Character; if not chr then return end
+				mset = chr:FindFirstChild("Moveset"); if not mset then return end
+				dfist = mset:FindFirstChild("Divergent Fist"); if not dfist then return end
+				activateRE:FireServer(dfist)
+				task.wait(blackFlashDelay2)
+				chr = LocalPlayer.Character; if not chr then return end
+				mset = chr:FindFirstChild("Moveset"); if not mset then return end
+				dfist = mset:FindFirstChild("Divergent Fist"); if not dfist then return end
+				activateRE:FireServer(dfist)
+			end)
+		end)
+	end
+end)
+
+-- Auto Black Flash loop
+task.spawn(function()
+	while true do
+		if autoBlackFlashEnabled then
+			pcall(function()
+				local activateRE = ReplicatedStorage:WaitForChild("Knit"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("DivergentFistService"):WaitForChild("RE"):WaitForChild("Activated")
+				local chr = LocalPlayer.Character; if not chr then return end
+				local mset = chr:FindFirstChild("Moveset"); if not mset then return end
+				local dfist = mset:FindFirstChild("Divergent Fist"); if not dfist then return end
+				activateRE:FireServer(dfist)
+				task.wait(blackFlashDelay1)
+				chr = LocalPlayer.Character; if not chr then return end
+				mset = chr:FindFirstChild("Moveset"); if not mset then return end
+				dfist = mset:FindFirstChild("Divergent Fist"); if not dfist then return end
+				activateRE:FireServer(dfist)
+				task.wait(blackFlashDelay2)
+				chr = LocalPlayer.Character; if not chr then return end
+				mset = chr:FindFirstChild("Moveset"); if not mset then return end
+				dfist = mset:FindFirstChild("Divergent Fist"); if not dfist then return end
+				activateRE:FireServer(dfist)
+			end)
+		end
+		task.wait(1)
 	end
 end)
 
