@@ -1,10 +1,3 @@
---[[
-    Nova Template
-    A reusable UI template based on Nova's interface design.
-    
-    This script is NOT intended to be modified.
-    Powered by Wax Bundler
---]]
 
 -- ++++++++ WAX BUNDLED DATA BELOW ++++++++ --
 
@@ -13,438 +6,6 @@ local ImportGlobals
 
 -- Holds direct closure data (defining this before the DOM tree for line debugging etc)
 local ClosureBindings = {
-    [7] = function()local wax,script,require=ImportGlobals(7)local ImportGlobals return (function(...)--[[
-	Interface Module - Template
-	Utility for creating UI elements with properties applied automatically.
-	
-	Usage:
-		local Interface = require(path.to.Interface)
-		
-		local frame = Interface.New("Frame", {
-			Size = UDim2.fromOffset(200, 100),
-			BackgroundColor3 = Color3.fromRGB(30, 30, 30),
-			Parent = screenGui,
-			
-			["UICorner"] = { CornerRadius = UDim.new(0, 8) },
-			["UIStroke"] = { Color = Color3.fromRGB(50, 50, 50), Thickness = 1 },
-		})
-]]
-
-local Interface = {}
-
--- Special UI components that can be created inline
-local SpecialProperties = {
-	["UICorner"] = true,
-	["UIStroke"] = true,
-	["UIPadding"] = true,
-	["UIListLayout"] = true,
-	["UIGridLayout"] = true,
-	["UITableLayout"] = true,
-	["UIPageLayout"] = true,
-	["UIFlexItem"] = true,
-	["UISizeConstraint"] = true,
-	["UITextSizeConstraint"] = true,
-	["UIAspectRatioConstraint"] = true,
-	["UIGradient"] = true,
-	["UIScale"] = true,
-}
-
---[[
-	Create a new instance with properties
-	@param className The class name of the instance to create
-	@param properties Table of properties to apply (supports nested UI components)
-	@return The created instance
-]]
-function Interface.New(className: string, properties: { [string]: any }?): Instance
-	local instance = Instance.new(className)
-
-	if properties then
-		for key, value in pairs(properties) do
-			if SpecialProperties[key] then
-				-- Create UI component as child
-				local uiComponent = Instance.new(key)
-				if type(value) == "table" then
-					for prop, val in pairs(value) do
-						uiComponent[prop] = val
-					end
-				end
-				uiComponent.Parent = instance
-			else
-				instance[key] = value
-			end
-		end
-	end
-
-	return instance
-end
-
---[[
-	Create a ScreenGui with common settings
-	@param name The name of the ScreenGui
-	@param parent Optional parent (defaults to CoreGui/PlayerGui)
-	@return The created ScreenGui
-]]
-function Interface.CreateScreenGui(name: string, parent: Instance?): ScreenGui
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = name
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.ResetOnSpawn = false
-	screenGui.DisplayOrder = 999999
-
-	if parent then
-		screenGui.Parent = parent
-	else
-		-- Try gethui first, then CoreGui
-		local success, _ = pcall(function()
-			if gethui then
-				screenGui.Parent = gethui()
-			else
-				screenGui.Parent = wax.shared.CoreGui
-			end
-		end)
-
-		if not success then
-			pcall(function()
-				screenGui.Parent = wax.shared.Players.LocalPlayer:WaitForChild("PlayerGui")
-			end)
-		end
-	end
-
-	return screenGui
-end
-
---[[
-	Create a TextLabel with sensible defaults
-]]
-function Interface.CreateTextLabel(properties: { [string]: any }): TextLabel
-	local defaults = {
-		BackgroundTransparency = 1,
-		TextColor3 = Color3.fromRGB(220, 220, 220),
-		TextSize = 14,
-		Font = Enum.Font.GothamMedium,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("TextLabel", properties) :: TextLabel
-end
-
---[[
-	Create a TextButton with sensible defaults
-]]
-function Interface.CreateTextButton(properties: { [string]: any }): TextButton
-	local defaults = {
-		BackgroundTransparency = 1,
-		TextColor3 = Color3.fromRGB(220, 220, 220),
-		TextSize = 14,
-		Font = Enum.Font.GothamMedium,
-		AutoButtonColor = false,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("TextButton", properties) :: TextButton
-end
-
---[[
-	Create an ImageLabel with sensible defaults
-]]
-function Interface.CreateImageLabel(properties: { [string]: any }): ImageLabel
-	local defaults = {
-		BackgroundTransparency = 1,
-		ScaleType = Enum.ScaleType.Fit,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("ImageLabel", properties) :: ImageLabel
-end
-
---[[
-	Create an ImageButton with sensible defaults
-]]
-function Interface.CreateImageButton(properties: { [string]: any }): ImageButton
-	local defaults = {
-		BackgroundTransparency = 1,
-		ScaleType = Enum.ScaleType.Fit,
-		AutoButtonColor = false,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("ImageButton", properties) :: ImageButton
-end
-
---[[
-	Create a ScrollingFrame with sensible defaults
-]]
-function Interface.CreateScrollingFrame(properties: { [string]: any }): ScrollingFrame
-	local defaults = {
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80),
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-	}
-
-	for key, value in pairs(defaults) do
-		if properties[key] == nil then
-			properties[key] = value
-		end
-	end
-
-	return Interface.New("ScrollingFrame", properties) :: ScrollingFrame
-end
-
-return Interface
-
-end)() end,
-    [9] = function()local wax,script,require=ImportGlobals(9)local ImportGlobals return (function(...)--[[
-	Sonner Module - Template
-	Toast notification system inspired by Emil Kowalski's Sonner.
-	
-	Usage:
-		local Sonner = require(path.to.Sonner)
-		
-		-- Initialize with parent ScreenGui
-		Sonner.Initialize(screenGui)
-		
-		-- Show notifications
-		Sonner.info("Information message")
-		Sonner.success("Operation successful!")
-		Sonner.warning("Warning message")
-		Sonner.error("Something went wrong")
-		Sonner.toast("Simple toast message")
-]]
-
-local Sonner = {
-	Queue = {},
-	TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Exponential),
-	Wrapper = nil,
-	PendingQueue = {},
-	Processing = false,
-}
-
-local TweenService = game:GetService("TweenService")
-
--- Default notification icons (Lucide icon names)
-local NotificationIcons = {
-	info = "info",
-	success = "circle-check",
-	warning = "triangle-alert",
-	error = "circle-alert",
-	loading = "loader-circle",
-}
-
--- Optional Icons module reference (set via Initialize)
-local Icons = nil
-
-local function CreateNotificationObject(zindex: number, iconName: string?, text: string)
-	-- Main notification container
-	local notification = Instance.new("CanvasGroup")
-	notification.BorderSizePixel = 0
-	notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	notification.AnchorPoint = Vector2.new(0.5, 1)
-	notification.Size = UDim2.new(1, 0, 0, 42)
-	notification.GroupTransparency = 1
-	notification.ZIndex = zindex
-	notification.Position = UDim2.new(0.5, 0, 1, 50)
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = notification
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(40, 40, 40)
-	stroke.Thickness = 1
-	stroke.Parent = notification
-
-	-- Icon (if provided and Icons module available)
-	local hasIcon = iconName and Icons
-	if hasIcon then
-		local iconLabel = Instance.new("ImageLabel")
-		iconLabel.BackgroundTransparency = 1
-		iconLabel.Size = UDim2.fromOffset(16, 16)
-		iconLabel.Position = UDim2.new(0, 12, 0.5, 0)
-		iconLabel.AnchorPoint = Vector2.new(0, 0.5)
-		iconLabel.ImageColor3 = Color3.fromRGB(200, 200, 200)
-		iconLabel.Parent = notification
-
-		if Icons.ApplyIcon then
-			Icons.ApplyIcon(iconLabel, iconName)
-		end
-	end
-
-	-- Text
-	local textLabel = Instance.new("TextLabel")
-	textLabel.BackgroundTransparency = 1
-	textLabel.Size = UDim2.new(1, -44, 1, 0)
-	textLabel.Position = UDim2.new(0, hasIcon and 36 or 12, 0, 0)
-	textLabel.Text = text
-	textLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-	textLabel.TextSize = 13
-	textLabel.Font = Enum.Font.GothamMedium
-	textLabel.TextXAlignment = Enum.TextXAlignment.Left
-	textLabel.TextTruncate = Enum.TextTruncate.AtEnd
-	textLabel.Parent = notification
-
-	return notification
-end
-
-local function ProcessQueue()
-	if Sonner.Processing then
-		return
-	end
-	Sonner.Processing = true
-
-	while #Sonner.PendingQueue > 0 do
-		local entry = table.remove(Sonner.PendingQueue, 1)
-		local notif = entry.notif
-		local duration = entry.duration or 4.5
-
-		if Sonner.Wrapper then
-			notif.Parent = Sonner.Wrapper
-
-			-- Animate in
-			TweenService:Create(notif, Sonner.TweenInfo, {
-				Position = UDim2.new(0.5, 0, 1, -8),
-				GroupTransparency = 0,
-			}):Play()
-
-			-- Auto dismiss
-			task.delay(duration, function()
-				local tween = TweenService:Create(notif, Sonner.TweenInfo, {
-					Position = UDim2.new(0.5, 0, 1, 50),
-					GroupTransparency = 1,
-				})
-				tween:Play()
-				tween.Completed:Connect(function()
-					notif:Destroy()
-
-					-- Remove from queue
-					local index = table.find(Sonner.Queue, notif)
-					if index then
-						table.remove(Sonner.Queue, index)
-					end
-				end)
-			end)
-		end
-	end
-
-	Sonner.Processing = false
-end
-
-local function ShowToast(iconName: string?, text: string, duration: number?)
-	if not Sonner.Wrapper then
-		return
-	end
-
-	local zindex = #Sonner.Queue + 1
-	local notif = CreateNotificationObject(zindex, iconName, text)
-
-	table.insert(Sonner.Queue, notif)
-	table.insert(Sonner.PendingQueue, {
-		notif = notif,
-		duration = duration or 4.5,
-	})
-
-	task.spawn(ProcessQueue)
-end
-
---[[
-	Initialize Sonner with a parent ScreenGui
-	@param parent The ScreenGui to parent notifications to
-	@param iconsModule Optional Icons module for displaying icons
-]]
-function Sonner.Initialize(parent: ScreenGui, iconsModule: any?)
-	Icons = iconsModule
-
-	Sonner.Wrapper = Instance.new("Frame")
-	Sonner.Wrapper.BackgroundTransparency = 1
-	Sonner.Wrapper.Size = UDim2.new(0, 360, 0, 200)
-	Sonner.Wrapper.Position = UDim2.new(0.5, 0, 1, -20)
-	Sonner.Wrapper.AnchorPoint = Vector2.new(0.5, 1)
-	Sonner.Wrapper.ZIndex = 100000
-	Sonner.Wrapper.Parent = parent
-end
-
---[[
-	Show an info notification
-	@param text The notification text
-	@param duration Optional duration in seconds (default: 4.5)
-]]
-function Sonner.info(text: string, duration: number?)
-	ShowToast(NotificationIcons.info, text, duration)
-end
-
---[[
-	Show a success notification
-	@param text The notification text
-	@param duration Optional duration in seconds (default: 4.5)
-]]
-function Sonner.success(text: string, duration: number?)
-	ShowToast(NotificationIcons.success, text, duration)
-end
-
---[[
-	Show a warning notification
-	@param text The notification text
-	@param duration Optional duration in seconds (default: 4.5)
-]]
-function Sonner.warning(text: string, duration: number?)
-	ShowToast(NotificationIcons.warning, text, duration)
-end
-
---[[
-	Show an error notification
-	@param text The notification text
-	@param duration Optional duration in seconds (default: 4.5)
-]]
-function Sonner.error(text: string, duration: number?)
-	ShowToast(NotificationIcons.error, text, duration)
-end
-
---[[
-	Show a simple toast without icon
-	@param text The notification text
-	@param duration Optional duration in seconds (default: 4.5)
-]]
-function Sonner.toast(text: string, duration: number?)
-	ShowToast(nil, text, duration)
-end
-
---[[
-	Clear all active notifications
-]]
-function Sonner.clear()
-	for _, notif in ipairs(Sonner.Queue) do
-		notif:Destroy()
-	end
-	Sonner.Queue = {}
-	Sonner.PendingQueue = {}
-end
-
-return Sonner
-
-end)() end,
     [6] = function()local wax,script,require=ImportGlobals(6)local ImportGlobals return (function(...)--[[
 	Icons Module - Template
 	Fetches and manages Lucide icons for the UI.
@@ -1125,7 +686,7 @@ local AboutSection = CreateSettingsSection("About")
 Interface.New("TextLabel", {
 	BackgroundTransparency = 1,
 	Size = UDim2.new(1, 0, 0, 24),
-	Text = "<b>Nova UI</b> — GUI Library",
+	Text = "<b>Nova UI</b> â€” GUI Library",
 	TextColor3 = Theme.TextMuted,
 	TextSize = 12,
 	Font = Enum.Font.GothamMedium,
@@ -1886,13 +1447,198 @@ Misc:AddButton("Reset Settings", function()
 end)
 
 -- ============================================================
--- SILENT AIM INTEGRATION
+-- SERVICES (shared)
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
+
+-- ============================================================
+-- ORCA FEATURES â€” Character / Players / Server
+-- ============================================================
+
+-- --- state ---
+local FlightEnabled = false
+local FlightSpeed = 60
+local WalkSpeedEnabled = false
+local WalkSpeedValue = 16
+local JumpHeightEnabled = false
+local JumpHeightValue = 50
+local NoclipEnabled = false
+local GodModeEnabled = false
+local FreecamEnabled = false
+local FreecamSpeed = 1
+local FreecamCFrame: CFrame? = nil
+local OriginalCameraSubject = nil
+local SpectateEnabled = false
+local SpectateTarget: string? = nil
+
+-- flight objects
+local FlightBodyVelocity: BodyVelocity? = nil
+local FlightBodyGyro: BodyGyro? = nil
+
+-- --- Character category ---
+local CharCat = Library:AddCategory("Character", "user")
+CharCat:AddToggle("Flight", false, function(v)
+	FlightEnabled = v
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if v and hrp then
+		if FlightBodyVelocity then FlightBodyVelocity:Destroy() end
+		if FlightBodyGyro then FlightBodyGyro:Destroy() end
+		FlightBodyVelocity = Instance.new("BodyVelocity")
+		FlightBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+		FlightBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+		FlightBodyVelocity.Parent = hrp
+		FlightBodyGyro = Instance.new("BodyGyro")
+		FlightBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+		FlightBodyGyro.P = 9000
+		FlightBodyGyro.Parent = hrp
+		if hum then hum.PlatformStand = true end
+	else
+		if FlightBodyVelocity then FlightBodyVelocity:Destroy(); FlightBodyVelocity = nil end
+		if FlightBodyGyro then FlightBodyGyro:Destroy(); FlightBodyGyro = nil end
+		if hum then hum.PlatformStand = false end
+	end
+	Library:Notify(`Flight: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+CharCat:AddSlider("Flight Speed", 60, 10, 200, function(v)
+	FlightSpeed = v
+end)
+CharCat:AddSeparator()
+CharCat:AddToggle("Walk Speed", false, function(v)
+	WalkSpeedEnabled = v
+	Library:Notify(`Walk Speed: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+CharCat:AddSlider("Speed Value", 16, 1, 500, function(v)
+	WalkSpeedValue = v
+end)
+CharCat:AddSeparator()
+CharCat:AddToggle("Jump Height", false, function(v)
+	JumpHeightEnabled = v
+	Library:Notify(`Jump Height: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+CharCat:AddSlider("Height Value", 50, 1, 500, function(v)
+	JumpHeightValue = v
+end)
+CharCat:AddSeparator()
+CharCat:AddToggle("Noclip", false, function(v)
+	NoclipEnabled = v
+	Library:Notify(`Noclip: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+CharCat:AddToggle("God Mode", false, function(v)
+	GodModeEnabled = v
+	Library:Notify(`God Mode: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+CharCat:AddSeparator()
+CharCat:AddToggle("Freecam", false, function(v)
+	FreecamEnabled = v
+	local cam = Workspace.CurrentCamera
+	if v then
+		OriginalCameraSubject = cam.CameraSubject
+		FreecamCFrame = cam.CFrame
+		cam.CameraType = Enum.CameraType.Scriptable
+	else
+		cam.CameraType = Enum.CameraType.Custom
+		if OriginalCameraSubject then
+			cam.CameraSubject = OriginalCameraSubject
+		end
+		FreecamCFrame = nil
+	end
+	Library:Notify(`Freecam: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+CharCat:AddSlider("Freecam Speed", 1, 1, 10, function(v)
+	FreecamSpeed = v
+end)
+
+-- --- Players category ---
+local PlayersCat = Library:AddCategory("Players", "users")
+local _playerNames: {string} = {}
+for _, p in Players:GetPlayers() do
+	if p ~= LocalPlayer then table.insert(_playerNames, p.Name) end
+end
+local TargetPlayerDropdown = PlayersCat:AddDropdown("Target Player", _playerNames, _playerNames[1] or "(none)", function(v)
+	SpectateTarget = v
+end)
+Players.PlayerAdded:Connect(function(p)
+	if p ~= LocalPlayer then
+		table.insert(_playerNames, p.Name)
+		if TargetPlayerDropdown.UpdateOptions then TargetPlayerDropdown:UpdateOptions(_playerNames) end
+	end
+end)
+Players.PlayerRemoving:Connect(function(p)
+	local idx = table.find(_playerNames, p.Name)
+	if idx then table.remove(_playerNames, idx) end
+	if TargetPlayerDropdown.UpdateOptions then TargetPlayerDropdown:UpdateOptions(_playerNames) end
+end)
+PlayersCat:AddButton("Teleport to Player", function()
+	if not SpectateTarget then Library:Notify("No player selected!", "error"); return end
+	local target = Players:FindFirstChild(SpectateTarget)
+	if not target or not target.Character then Library:Notify("Player not found!", "error"); return end
+	local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+	local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if hrp and myHrp then
+		myHrp.CFrame = hrp.CFrame * CFrame.new(0, 0, 3)
+		Library:Notify(`Teleported to {SpectateTarget}!`, "success")
+	end
+end)
+PlayersCat:AddToggle("Spectate", false, function(v)
+	SpectateEnabled = v
+	if v and SpectateTarget then
+		local target = Players:FindFirstChild(SpectateTarget)
+		if target and target.Character then
+			Workspace.CurrentCamera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid") or target.Character
+			Library:Notify(`Spectating {SpectateTarget}`, "success")
+		end
+	else
+		local char = LocalPlayer.Character
+		if char then
+			Workspace.CurrentCamera.CameraSubject = char:FindFirstChildOfClass("Humanoid") or char
+		end
+		if v then Library:Notify("No player selected!", "error") end
+	end
+end)
+
+-- --- Server features in Misc ---
+Misc:AddSeparator()
+Misc:AddButton("Rejoin", function()
+	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+	Library:Notify("Rejoining...", "warning")
+end)
+Misc:AddButton("Server Hop", function()
+	pcall(function()
+		local url = `https://games.roblox.com/v1/games/{game.GameId}/servers/Public?sortOrder=Asc&limit=100`
+		local data = HttpService:JSONDecode(game:HttpGet(url))
+		if data and data.data then
+			for _, s in data.data do
+				if s.id ~= game.JobId and s.playing < s.maxPlayers then
+					TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id)
+					Library:Notify("Server hopping...", "warning")
+					return
+				end
+			end
+		end
+		Library:Notify("No available servers!", "error")
+	end)
+end)
+Misc:AddButton("Copy Job ID", function()
+	if setclipboard then
+		setclipboard(game.JobId)
+		Library:Notify("Job ID copied!", "success")
+	else
+		Library:Notify("Clipboard not supported!", "error")
+	end
+end)
+
+-- ============================================================
+-- SILENT AIM INTEGRATION
+-- ============================================================
 
 -- Bone mapping
 local BoneMap = {
@@ -2063,9 +1809,524 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
-Library:Notify("Nova Silent Aim loaded!", "success")
+-- ============================================================
+-- ORCA FEATURES â€” GAME LOGIC LOOPS
+-- ============================================================
+
+-- Flight movement
+RunService.Heartbeat:Connect(function()
+	if FlightEnabled then
+		local char = LocalPlayer.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp and FlightBodyVelocity and FlightBodyGyro then
+			local cam = Workspace.CurrentCamera
+			local dir = Vector3.new(0, 0, 0)
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0, 1, 0) end
+			FlightBodyVelocity.Velocity = if dir.Magnitude > 0 then dir.Unit * FlightSpeed else Vector3.zero
+			FlightBodyGyro.CFrame = cam.CFrame
+		end
+	end
+end)
+
+-- Noclip
+RunService.Stepped:Connect(function()
+	if NoclipEnabled then
+		local char = LocalPlayer.Character
+		if char then
+			for _, part in char:GetDescendants() do
+				if part:IsA("BasePart") then part.CanCollide = false end
+			end
+		end
+	end
+end)
+
+-- WalkSpeed, JumpHeight, GodMode continuous
+RunService.Heartbeat:Connect(function()
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		if WalkSpeedEnabled then hum.WalkSpeed = WalkSpeedValue end
+		if JumpHeightEnabled then hum.UseJumpPower = true; hum.JumpPower = JumpHeightValue end
+		if GodModeEnabled then hum.Health = hum.MaxHealth end
+	end
+end)
+
+-- Freecam movement
+RunService.RenderStepped:Connect(function(dt)
+	if FreecamEnabled and FreecamCFrame then
+		local cam = Workspace.CurrentCamera
+		local speed = FreecamSpeed * 60 * dt
+		local moveDir = Vector3.zero
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + FreecamCFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - FreecamCFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - FreecamCFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + FreecamCFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+		if moveDir.Magnitude > 0 then
+			FreecamCFrame = FreecamCFrame + moveDir.Unit * speed
+		end
+		-- Apply mouse look from current camera
+		local _, ry = cam.CFrame:ToEulerAnglesYXZ()
+		local rx, _ = cam.CFrame:ToEulerAnglesYXZ()
+		FreecamCFrame = CFrame.new(FreecamCFrame.Position) * CFrame.Angles(rx, ry, 0)
+		cam.CFrame = FreecamCFrame
+	end
+end)
+
+-- Spectate follow
+RunService.Heartbeat:Connect(function()
+	if SpectateEnabled and SpectateTarget then
+		local target = Players:FindFirstChild(SpectateTarget)
+		if target and target.Character then
+			local hum = target.Character:FindFirstChildOfClass("Humanoid")
+			if hum and Workspace.CurrentCamera.CameraSubject ~= hum then
+				Workspace.CurrentCamera.CameraSubject = hum
+			end
+		end
+	end
+end)
+
+Library:Notify("Nova loaded!", "success")
 
 return Library
+
+end)() end,
+    [9] = function()local wax,script,require=ImportGlobals(9)local ImportGlobals return (function(...)--[[
+	Sonner Module - Template
+	Toast notification system inspired by Emil Kowalski's Sonner.
+	
+	Usage:
+		local Sonner = require(path.to.Sonner)
+		
+		-- Initialize with parent ScreenGui
+		Sonner.Initialize(screenGui)
+		
+		-- Show notifications
+		Sonner.info("Information message")
+		Sonner.success("Operation successful!")
+		Sonner.warning("Warning message")
+		Sonner.error("Something went wrong")
+		Sonner.toast("Simple toast message")
+]]
+
+local Sonner = {
+	Queue = {},
+	TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Exponential),
+	Wrapper = nil,
+	PendingQueue = {},
+	Processing = false,
+}
+
+local TweenService = game:GetService("TweenService")
+
+-- Default notification icons (Lucide icon names)
+local NotificationIcons = {
+	info = "info",
+	success = "circle-check",
+	warning = "triangle-alert",
+	error = "circle-alert",
+	loading = "loader-circle",
+}
+
+-- Optional Icons module reference (set via Initialize)
+local Icons = nil
+
+local function CreateNotificationObject(zindex: number, iconName: string?, text: string)
+	-- Main notification container
+	local notification = Instance.new("CanvasGroup")
+	notification.BorderSizePixel = 0
+	notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	notification.AnchorPoint = Vector2.new(0.5, 1)
+	notification.Size = UDim2.new(1, 0, 0, 42)
+	notification.GroupTransparency = 1
+	notification.ZIndex = zindex
+	notification.Position = UDim2.new(0.5, 0, 1, 50)
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = notification
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(40, 40, 40)
+	stroke.Thickness = 1
+	stroke.Parent = notification
+
+	-- Icon (if provided and Icons module available)
+	local hasIcon = iconName and Icons
+	if hasIcon then
+		local iconLabel = Instance.new("ImageLabel")
+		iconLabel.BackgroundTransparency = 1
+		iconLabel.Size = UDim2.fromOffset(16, 16)
+		iconLabel.Position = UDim2.new(0, 12, 0.5, 0)
+		iconLabel.AnchorPoint = Vector2.new(0, 0.5)
+		iconLabel.ImageColor3 = Color3.fromRGB(200, 200, 200)
+		iconLabel.Parent = notification
+
+		if Icons.ApplyIcon then
+			Icons.ApplyIcon(iconLabel, iconName)
+		end
+	end
+
+	-- Text
+	local textLabel = Instance.new("TextLabel")
+	textLabel.BackgroundTransparency = 1
+	textLabel.Size = UDim2.new(1, -44, 1, 0)
+	textLabel.Position = UDim2.new(0, hasIcon and 36 or 12, 0, 0)
+	textLabel.Text = text
+	textLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+	textLabel.TextSize = 13
+	textLabel.Font = Enum.Font.GothamMedium
+	textLabel.TextXAlignment = Enum.TextXAlignment.Left
+	textLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	textLabel.Parent = notification
+
+	return notification
+end
+
+local function ProcessQueue()
+	if Sonner.Processing then
+		return
+	end
+	Sonner.Processing = true
+
+	while #Sonner.PendingQueue > 0 do
+		local entry = table.remove(Sonner.PendingQueue, 1)
+		local notif = entry.notif
+		local duration = entry.duration or 4.5
+
+		if Sonner.Wrapper then
+			notif.Parent = Sonner.Wrapper
+
+			-- Animate in
+			TweenService:Create(notif, Sonner.TweenInfo, {
+				Position = UDim2.new(0.5, 0, 1, -8),
+				GroupTransparency = 0,
+			}):Play()
+
+			-- Auto dismiss
+			task.delay(duration, function()
+				local tween = TweenService:Create(notif, Sonner.TweenInfo, {
+					Position = UDim2.new(0.5, 0, 1, 50),
+					GroupTransparency = 1,
+				})
+				tween:Play()
+				tween.Completed:Connect(function()
+					notif:Destroy()
+
+					-- Remove from queue
+					local index = table.find(Sonner.Queue, notif)
+					if index then
+						table.remove(Sonner.Queue, index)
+					end
+				end)
+			end)
+		end
+	end
+
+	Sonner.Processing = false
+end
+
+local function ShowToast(iconName: string?, text: string, duration: number?)
+	if not Sonner.Wrapper then
+		return
+	end
+
+	local zindex = #Sonner.Queue + 1
+	local notif = CreateNotificationObject(zindex, iconName, text)
+
+	table.insert(Sonner.Queue, notif)
+	table.insert(Sonner.PendingQueue, {
+		notif = notif,
+		duration = duration or 4.5,
+	})
+
+	task.spawn(ProcessQueue)
+end
+
+--[[
+	Initialize Sonner with a parent ScreenGui
+	@param parent The ScreenGui to parent notifications to
+	@param iconsModule Optional Icons module for displaying icons
+]]
+function Sonner.Initialize(parent: ScreenGui, iconsModule: any?)
+	Icons = iconsModule
+
+	Sonner.Wrapper = Instance.new("Frame")
+	Sonner.Wrapper.BackgroundTransparency = 1
+	Sonner.Wrapper.Size = UDim2.new(0, 360, 0, 200)
+	Sonner.Wrapper.Position = UDim2.new(0.5, 0, 1, -20)
+	Sonner.Wrapper.AnchorPoint = Vector2.new(0.5, 1)
+	Sonner.Wrapper.ZIndex = 100000
+	Sonner.Wrapper.Parent = parent
+end
+
+--[[
+	Show an info notification
+	@param text The notification text
+	@param duration Optional duration in seconds (default: 4.5)
+]]
+function Sonner.info(text: string, duration: number?)
+	ShowToast(NotificationIcons.info, text, duration)
+end
+
+--[[
+	Show a success notification
+	@param text The notification text
+	@param duration Optional duration in seconds (default: 4.5)
+]]
+function Sonner.success(text: string, duration: number?)
+	ShowToast(NotificationIcons.success, text, duration)
+end
+
+--[[
+	Show a warning notification
+	@param text The notification text
+	@param duration Optional duration in seconds (default: 4.5)
+]]
+function Sonner.warning(text: string, duration: number?)
+	ShowToast(NotificationIcons.warning, text, duration)
+end
+
+--[[
+	Show an error notification
+	@param text The notification text
+	@param duration Optional duration in seconds (default: 4.5)
+]]
+function Sonner.error(text: string, duration: number?)
+	ShowToast(NotificationIcons.error, text, duration)
+end
+
+--[[
+	Show a simple toast without icon
+	@param text The notification text
+	@param duration Optional duration in seconds (default: 4.5)
+]]
+function Sonner.toast(text: string, duration: number?)
+	ShowToast(nil, text, duration)
+end
+
+--[[
+	Clear all active notifications
+]]
+function Sonner.clear()
+	for _, notif in ipairs(Sonner.Queue) do
+		notif:Destroy()
+	end
+	Sonner.Queue = {}
+	Sonner.PendingQueue = {}
+end
+
+return Sonner
+
+end)() end,
+    [7] = function()local wax,script,require=ImportGlobals(7)local ImportGlobals return (function(...)--[[
+	Interface Module - Template
+	Utility for creating UI elements with properties applied automatically.
+	
+	Usage:
+		local Interface = require(path.to.Interface)
+		
+		local frame = Interface.New("Frame", {
+			Size = UDim2.fromOffset(200, 100),
+			BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+			Parent = screenGui,
+			
+			["UICorner"] = { CornerRadius = UDim.new(0, 8) },
+			["UIStroke"] = { Color = Color3.fromRGB(50, 50, 50), Thickness = 1 },
+		})
+]]
+
+local Interface = {}
+
+-- Special UI components that can be created inline
+local SpecialProperties = {
+	["UICorner"] = true,
+	["UIStroke"] = true,
+	["UIPadding"] = true,
+	["UIListLayout"] = true,
+	["UIGridLayout"] = true,
+	["UITableLayout"] = true,
+	["UIPageLayout"] = true,
+	["UIFlexItem"] = true,
+	["UISizeConstraint"] = true,
+	["UITextSizeConstraint"] = true,
+	["UIAspectRatioConstraint"] = true,
+	["UIGradient"] = true,
+	["UIScale"] = true,
+}
+
+--[[
+	Create a new instance with properties
+	@param className The class name of the instance to create
+	@param properties Table of properties to apply (supports nested UI components)
+	@return The created instance
+]]
+function Interface.New(className: string, properties: { [string]: any }?): Instance
+	local instance = Instance.new(className)
+
+	if properties then
+		for key, value in pairs(properties) do
+			if SpecialProperties[key] then
+				-- Create UI component as child
+				local uiComponent = Instance.new(key)
+				if type(value) == "table" then
+					for prop, val in pairs(value) do
+						uiComponent[prop] = val
+					end
+				end
+				uiComponent.Parent = instance
+			else
+				instance[key] = value
+			end
+		end
+	end
+
+	return instance
+end
+
+--[[
+	Create a ScreenGui with common settings
+	@param name The name of the ScreenGui
+	@param parent Optional parent (defaults to CoreGui/PlayerGui)
+	@return The created ScreenGui
+]]
+function Interface.CreateScreenGui(name: string, parent: Instance?): ScreenGui
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = name
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.ResetOnSpawn = false
+	screenGui.DisplayOrder = 999999
+
+	if parent then
+		screenGui.Parent = parent
+	else
+		-- Try gethui first, then CoreGui
+		local success, _ = pcall(function()
+			if gethui then
+				screenGui.Parent = gethui()
+			else
+				screenGui.Parent = wax.shared.CoreGui
+			end
+		end)
+
+		if not success then
+			pcall(function()
+				screenGui.Parent = wax.shared.Players.LocalPlayer:WaitForChild("PlayerGui")
+			end)
+		end
+	end
+
+	return screenGui
+end
+
+--[[
+	Create a TextLabel with sensible defaults
+]]
+function Interface.CreateTextLabel(properties: { [string]: any }): TextLabel
+	local defaults = {
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(220, 220, 220),
+		TextSize = 14,
+		Font = Enum.Font.GothamMedium,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("TextLabel", properties) :: TextLabel
+end
+
+--[[
+	Create a TextButton with sensible defaults
+]]
+function Interface.CreateTextButton(properties: { [string]: any }): TextButton
+	local defaults = {
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(220, 220, 220),
+		TextSize = 14,
+		Font = Enum.Font.GothamMedium,
+		AutoButtonColor = false,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("TextButton", properties) :: TextButton
+end
+
+--[[
+	Create an ImageLabel with sensible defaults
+]]
+function Interface.CreateImageLabel(properties: { [string]: any }): ImageLabel
+	local defaults = {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("ImageLabel", properties) :: ImageLabel
+end
+
+--[[
+	Create an ImageButton with sensible defaults
+]]
+function Interface.CreateImageButton(properties: { [string]: any }): ImageButton
+	local defaults = {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		AutoButtonColor = false,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("ImageButton", properties) :: ImageButton
+end
+
+--[[
+	Create a ScrollingFrame with sensible defaults
+]]
+function Interface.CreateScrollingFrame(properties: { [string]: any }): ScrollingFrame
+	local defaults = {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80),
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	}
+
+	for key, value in pairs(defaults) do
+		if properties[key] == nil then
+			properties[key] = value
+		end
+	end
+
+	return Interface.New("ScrollingFrame", properties) :: ScrollingFrame
+end
+
+return Interface
 
 end)() end,
     [8] = function()local wax,script,require=ImportGlobals(8)local ImportGlobals return (function(...)--[[
@@ -2577,41 +2838,6 @@ local ObjectTree = {
                         },
                         {
                             {
-                                4,
-                                2,
-                                {
-                                    "Drag"
-                                }
-                            },
-                            {
-                                9,
-                                2,
-                                {
-                                    "Sonner"
-                                }
-                            },
-                            {
-                                8,
-                                2,
-                                {
-                                    "Resize"
-                                }
-                            },
-                            {
-                                7,
-                                2,
-                                {
-                                    "Interface"
-                                }
-                            },
-                            {
-                                10,
-                                2,
-                                {
-                                    "Theme"
-                                }
-                            },
-                            {
                                 5,
                                 2,
                                 {
@@ -2624,6 +2850,41 @@ local ObjectTree = {
                                 {
                                     "Icons"
                                 }
+                            },
+                            {
+                                4,
+                                2,
+                                {
+                                    "Drag"
+                                }
+                            },
+                            {
+                                10,
+                                2,
+                                {
+                                    "Theme"
+                                }
+                            },
+                            {
+                                9,
+                                2,
+                                {
+                                    "Sonner"
+                                }
+                            },
+                            {
+                                7,
+                                2,
+                                {
+                                    "Interface"
+                                }
+                            },
+                            {
+                                8,
+                                2,
+                                {
+                                    "Resize"
+                                }
                             }
                         }
                     }
@@ -2635,14 +2896,14 @@ local ObjectTree = {
 
 -- Line offsets for debugging (only included when minifyTables is false)
 local LineOffsets = {
-    [6] = 440,
-    [2] = 545,
-    [9] = 212,
-    [7] = 8,
-    [8] = 2063,
-    [10] = 2202,
-    [5] = 2261,
-    [4] = 2443
+    [7] = 2127,
+    [9] = 1899,
+    [2] = 113,
+    [6] = 8,
+    [8] = 2331,
+    [10] = 2470,
+    [5] = 2529,
+    [4] = 2711
 }
 
 -- Misc AOT variable imports
