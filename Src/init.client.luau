@@ -1261,6 +1261,81 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- ============================================================
+-- GUI CATEGORIES
+-- ============================================================
+
+-- Drawing objects (safe init)
+local FOVCircle, TargetDot
+pcall(function()
+	FOVCircle = Drawing.new("Circle")
+	FOVCircle.Thickness = 1
+	FOVCircle.NumSides = 64
+	FOVCircle.Filled = false
+	FOVCircle.Transparency = 0.8
+	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
+	FOVCircle.Visible = false
+
+	TargetDot = Drawing.new("Circle")
+	TargetDot.Thickness = 1
+	TargetDot.NumSides = 16
+	TargetDot.Filled = true
+	TargetDot.Radius = 4
+	TargetDot.Color = Color3.fromRGB(240, 60, 60)
+	TargetDot.Visible = false
+end)
+
+-- Aimbot category
+local Aimbot = Library:AddCategory("Aimbot", "crosshair")
+Aimbot:AddToggle("Silent Aim", SilentAimEnabled, function(v)
+	SilentAimEnabled = v
+	Library:Notify(`Silent Aim: {v and "ON" or "OFF"}`, v and "success" or "error")
+end)
+Aimbot:AddSeparator()
+Aimbot:AddDropdown("Target Bone", {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "Random"}, TargetBone, function(v)
+	TargetBone = v
+	Library:Notify(`Target Bone: {v}`)
+end)
+Aimbot:AddSlider("Hit Chance", HitChance, 1, 100, function(v)
+	HitChance = v
+end)
+Aimbot:AddSlider("FOV Radius", FOVRadius, 50, 9999, function(v)
+	FOVRadius = v
+end)
+Aimbot:AddToggle("Show FOV Circle", FOVVisible, function(v)
+	FOVVisible = v
+end)
+
+-- Visuals category
+local Visuals = Library:AddCategory("Visuals", "eye")
+Visuals:AddLabel("FOV circle and target dot are drawn on screen.")
+Visuals:AddSeparator()
+Visuals:AddSlider("FOV Circle Opacity", 80, 0, 100, function(v)
+	if FOVCircle then FOVCircle.Transparency = v / 100 end
+end)
+Visuals:AddSlider("Target Dot Size", 4, 1, 10, function(v)
+	if TargetDot then TargetDot.Radius = v end
+end)
+
+-- Misc category
+local Misc = Library:AddCategory("Misc", "wrench")
+Misc:AddButton("Reset Settings", function()
+	SilentAimEnabled = true
+	FOVRadius = 150
+	FOVVisible = false
+	TargetBone = "Head"
+	HitChance = 100
+	if FOVCircle then
+		FOVCircle.Transparency = 0.8
+		FOVCircle.Color = Color3.fromRGB(240, 60, 60)
+	end
+	if TargetDot then
+		TargetDot.Color = Color3.fromRGB(240, 60, 60)
+		TargetDot.Radius = 4
+	end
+	Library:Notify("Settings reset to default!", "warning")
+end)
+
+-- ============================================================
 -- SILENT AIM INTEGRATION
 -- ============================================================
 
@@ -1268,25 +1343,6 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
-
-local WeaponPackets = require(ReplicatedStorage.Common.Packets.WeaponPackets)
-
--- Drawing objects
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 1
-FOVCircle.NumSides = 64
-FOVCircle.Filled = false
-FOVCircle.Transparency = 0.8
-FOVCircle.Color = Color3.fromRGB(240, 60, 60)
-FOVCircle.Visible = false
-
-local TargetDot = Drawing.new("Circle")
-TargetDot.Thickness = 1
-TargetDot.NumSides = 16
-TargetDot.Filled = true
-TargetDot.Radius = 4
-TargetDot.Color = Color3.fromRGB(240, 60, 60)
-TargetDot.Visible = false
 
 -- Bone mapping
 local BoneMap = {
@@ -1409,34 +1465,39 @@ local function RollHitChance()
 	return math.random(1, 100) <= HitChance
 end
 
--- Hook weapon packet
-local OriginalSend = WeaponPackets.useWeapon.send
+-- Hook weapon packet (protected)
+pcall(function()
+	local WeaponPackets = require(ReplicatedStorage.Common.Packets.WeaponPackets)
+	local OriginalSend = WeaponPackets.useWeapon.send
 
-WeaponPackets.useWeapon.send = function(Data)
-	if SilentAimEnabled and RollHitChance() then
-		local TargetCharacter, TargetPart = GetNearestTarget()
-		if TargetCharacter and TargetPart then
-			Data.hitResult = TargetCharacter
-			Data.hitPart = TargetPart
-			Data.position = TargetPart.Position
-			Data.direction = (TargetPart.Position - Data.origin).Unit
+	WeaponPackets.useWeapon.send = function(Data)
+		if SilentAimEnabled and RollHitChance() then
+			local TargetCharacter, TargetPart = GetNearestTarget()
+			if TargetCharacter and TargetPart then
+				Data.hitResult = TargetCharacter
+				Data.hitPart = TargetPart
+				Data.position = TargetPart.Position
+				Data.direction = (TargetPart.Position - Data.origin).Unit
+			end
 		end
+		return OriginalSend(Data)
 	end
-	return OriginalSend(Data)
-end
+end)
 
 -- FOV circle & target dot render loop
 RunService.RenderStepped:Connect(function()
 	local Camera = workspace.CurrentCamera
 	local ScreenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
-	FOVCircle.Position = ScreenCenter
-	FOVCircle.Radius = FOVRadius
-	FOVCircle.Visible = FOVVisible and SilentAimEnabled
+	if FOVCircle then
+		FOVCircle.Position = ScreenCenter
+		FOVCircle.Radius = FOVRadius
+		FOVCircle.Visible = FOVVisible and SilentAimEnabled
+	end
 
 	if SilentAimEnabled then
 		local _, TargetPart = GetNearestTarget()
-		if TargetPart then
+		if TargetPart and TargetDot then
 			local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
 			if OnScreen then
 				TargetDot.Position = Vector2.new(ScreenPos.X, ScreenPos.Y)
@@ -1444,63 +1505,12 @@ RunService.RenderStepped:Connect(function()
 			else
 				TargetDot.Visible = false
 			end
-		else
+		elseif TargetDot then
 			TargetDot.Visible = false
 		end
-	else
+	elseif TargetDot then
 		TargetDot.Visible = false
 	end
-end)
-
--- ============================================================
--- GUI CATEGORIES
--- ============================================================
-
--- Aimbot category
-local Aimbot = Library:AddCategory("Aimbot", "crosshair")
-Aimbot:AddToggle("Silent Aim", SilentAimEnabled, function(v)
-	SilentAimEnabled = v
-	Library:Notify(`Silent Aim: {v and "ON" or "OFF"}`, v and "success" or "error")
-end)
-Aimbot:AddSeparator()
-Aimbot:AddDropdown("Target Bone", {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "Random"}, TargetBone, function(v)
-	TargetBone = v
-	Library:Notify(`Target Bone: {v}`)
-end)
-Aimbot:AddSlider("Hit Chance", HitChance, 1, 100, function(v)
-	HitChance = v
-end)
-Aimbot:AddSlider("FOV Radius", FOVRadius, 50, 9999, function(v)
-	FOVRadius = v
-end)
-Aimbot:AddToggle("Show FOV Circle", FOVVisible, function(v)
-	FOVVisible = v
-end)
-
--- Visuals category
-local Visuals = Library:AddCategory("Visuals", "eye")
-Visuals:AddLabel("FOV circle and target dot are drawn on screen.")
-Visuals:AddSeparator()
-Visuals:AddSlider("FOV Circle Opacity", 80, 0, 100, function(v)
-	FOVCircle.Transparency = v / 100
-end)
-Visuals:AddSlider("Target Dot Size", 4, 1, 10, function(v)
-	TargetDot.Radius = v
-end)
-
--- Misc category
-local Misc = Library:AddCategory("Misc", "wrench")
-Misc:AddButton("Reset Settings", function()
-	SilentAimEnabled = true
-	FOVRadius = 150
-	FOVVisible = false
-	TargetBone = "Head"
-	HitChance = 100
-	FOVCircle.Transparency = 0.8
-	FOVCircle.Color = Color3.fromRGB(240, 60, 60)
-	TargetDot.Color = Color3.fromRGB(240, 60, 60)
-	TargetDot.Radius = 4
-	Library:Notify("Settings reset to default!", "warning")
 end)
 
 Library:Notify("Nova Silent Aim loaded!", "success")
