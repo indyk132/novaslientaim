@@ -1307,8 +1307,6 @@ end)
 
 -- Visuals category
 local Visuals = Library:AddCategory("Visuals", "eye")
-Visuals:AddLabel("FOV circle and target dot are drawn on screen.")
-Visuals:AddSeparator()
 Visuals:AddSlider("FOV Circle Opacity", 80, 0, 100, function(v)
 	if FOVCircle then FOVCircle.Transparency = v / 100 end
 end)
