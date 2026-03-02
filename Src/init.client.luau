@@ -459,6 +459,14 @@ local function CreateSettingsDropdown(section, text, values, default, callback)
 	end)
 end
 
+-- Silent Aim State (declared early for settings references)
+local SilentAimEnabled = true
+local FOVRadius = 150
+local FOVVisible = false
+local TargetBone = "Head"
+local HitChance = 100
+local ToggleKey = Enum.KeyCode.RightShift
+
 -- Build settings sections
 local GeneralSection = CreateSettingsSection("General")
 CreateSettingsDropdown(GeneralSection, "DPI Scale", { "50%", "75%", "100%", "125%", "150%" }, "100%", function(value)
@@ -1262,14 +1270,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
 local WeaponPackets = require(ReplicatedStorage.Common.Packets.WeaponPackets)
-
--- Silent Aim State
-local SilentAimEnabled = true
-local FOVRadius = 150
-local FOVVisible = false
-local TargetBone = "Head"
-local HitChance = 100
-local ToggleKey = Enum.KeyCode.RightShift
 
 -- Drawing objects
 local FOVCircle = Drawing.new("Circle")
